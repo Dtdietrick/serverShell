@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Media Explorer</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+    }
+
+    #back-button {
+      display: none;
+      margin-bottom: 1rem;
+      cursor: pointer;
+      color: blue;
+      text-decoration: underline;
+    }
+
+    ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+
+    li {
+      margin: 0.5rem 0;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    li span {
+      margin-left: 0.5rem;
+    }
+
+    .folder-icon::before {
+      content: "📁";
+    }
+
+    .file-icon::before {
+      content: "🎵";
+    }
+
+    .playlist-icon::before {
+      content: "📜";
+    }
+
+    #playlist-popup {
+      position: fixed;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 600px;
+      background: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 1rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      z-index: 999;
+      display: none;
+    }
+
+    #playlist-popup h3 {
+      margin-top: 0;
+    }
+
+    #playlist-popup .close-btn {
+      float: right;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 1.2rem;
+      margin-top: -0.5rem;
+    }
+
+    audio, video {
+      width: 100%;
+      margin-top: 1rem;
+    }
+	
+	.playlist-folder-icon::before {
+	  content: "🎶";
+	  color: orange;
+	}
+
+	.playlist-file-icon::before {
+	  content: "📜";
+	  color: orange;
+	}
+	
+	#playlist-items {
+	  height: 300px;              /* Set a fixed height */
+	  overflow-y: auto;           /* Allow vertical scroll */
+	  padding-left: 1rem;
+	  border: 1px solid #ccc;
+	}
+	
+	#playlist-items li {
+	  padding: 0.5rem;
+	  border-bottom: 1px solid #ddd;
+	  cursor: pointer;
+	}
+  </style>
+</head>
+<body>
+
+  <h2>Media Library</h2>
+  <div id="back-button">⬅️ Back</div>
+  <div id="mediaTree">Loading...</div>
+
+  <div id="player"></div>
+  
+  <!-- Playlist popup -->
+  <div id="playlist-popup">
+    <span class="close-btn" onclick="closePlaylist()">✖</span>
+    <h3>🎵 Playlist</h3>
+    <ul id="playlist-items"></ul>
+
+    <div id="playlist-controls" style="margin: 1rem 0; text-align: center;">
+      <button onclick="prevInPlaylist()">⏮ Prev</button>
+      <button onclick="nextInPlaylist()">⏭ Next</button>
+	  <button onclick="shufflePlaylist()">🔀 Shuffle</button>
+    </div>
+
+    <div id="popup-player"></div>
+  </div>
+
+  <script>
+    const mediaTree = document.getElementById("mediaTree");
+    const player = document.getElementById("player");
+    const backButton = document.getElementById("back-button");
+
+    const playlistPopup = document.getElementById("playlist-popup");
+    const popupPlayer = document.getElementById("popup-player");
+    const playlistItems = document.getElementById("playlist-items");
+
+    let fileList = [];
+    let currentPath = "";
+	let currentPlaylist = [];
+	let currentTrackIndex = -1;
+	
+    function fetchAndRender() {
+      fetch("/media/list")
+        .then(res => res.json())
+        .then(files => {
+          fileList = files;
+          renderFolder(currentPath);
+        })
+        .catch(() => {
+          mediaTree.innerHTML = "<p>Error loading media list.</p>";
+        });
+    }
+
+	function renderFolder(path) {
+	  console.log("Rendering folder:", path);
+	  const folders = new Set();
+	  const files = [];
+
+	  const prefix = path ? path + "/" : "";
+
+	  fileList.forEach(file => {
+	    if (!file.startsWith(prefix)) return;
+
+	    const rest = file.slice(prefix.length);
+	    const parts = rest.split("/");
+
+	    if (parts.length === 1) {
+	      files.push(rest);
+	    } else {
+	      folders.add(parts[0]);
+	    }
+	  });
+
+	  mediaTree.innerHTML = "";
+	  const ul = document.createElement("ul");
+
+	  const sortedFolders = Array.from(folders).sort((a, b) => {
+	    if (a === "playlists") return -1;  // playlists first
+	    if (b === "playlists") return 1;
+	    return a.localeCompare(b);
+	  });
+	  
+	  sortedFolders.forEach(folder => {
+	    const li = document.createElement("li");
+	    // Special icon for "playlists" folder
+		const isPlaylistFolder = folder.toLowerCase() === "playlists";
+		if (isPlaylistFolder) {
+		  li.innerHTML = `<span class="playlist-folder-icon"></span><span>${folder}</span>`;
+		} else {
+		  li.innerHTML = `<span class="folder-icon"></span><span>${folder}</span>`;
+		}
+	    li.onclick = () => {
+	      currentPath = prefix + folder;
+	      renderFolder(currentPath);
+	    };
+	    ul.appendChild(li);
+	  });
+
+	  files.forEach(file => {
+	    const li = document.createElement("li");
+	    if (file.endsWith(".m3u")) {
+	      li.innerHTML = `<span class="playlist-file-icon"></span><span>${file}</span>`;
+	      li.onclick = () => loadPlaylist(prefix + file.replace(".m3u", ""));
+	    } else {
+	      li.innerHTML = `<span class="file-icon"></span><span>${file}</span>`;
+		  li.onclick = () => {
+		    const fixedPath = fixPathFirstDirLowercase(prefix + file);
+		    playMedia(fixedPath, false, false);  // no popup, not from playlist
+		  };
+	    }
+	    ul.appendChild(li);
+	  });
+
+	  mediaTree.appendChild(ul);
+	  backButton.style.display = currentPath ? "block" : "none";
+	}
+	function playMedia(filename, usePopup = false, fromPlaylist = false) {
+	  const ext = filename.split(".").pop().toLowerCase();
+	  const encodedPath = encodeURIComponent(filename).replace(/%2F/g, '/');
+	  const src = `/media/${encodedPath}${fromPlaylist ? "?fromPlaylist=true" : ""}`;
+
+	  const type = (ext === "mp3") ? "mpeg" : ext;
+	  const element = ["mp4", "webm", "ogg"].includes(ext)
+	    ? `<video controls autoplay><source src="${src}" type="video/${ext}">Video not supported.</video>`
+	    : `<audio controls autoplay><source src="${src}" type="audio/${type}">Audio not supported.</audio>`;
+
+	  if (usePopup) {
+	    popupPlayer.innerHTML = element;
+	  } else {
+	    player.innerHTML = element;
+	  }
+	}
+	let currentPlaylistName = null;
+	let playlistOffset = 0;
+	const playlistLimit = 10;
+	let playlistLoading = false;
+	let playlistHasMore = true;
+	
+	function loadPlaylist(name, reset = true) {
+	  if (reset) {
+	    currentPlaylistName = name;
+	    playlistOffset = 0;
+	    playlistHasMore = true;
+	    playlistItems.innerHTML = "";
+	    popupPlayer.innerHTML = "";
+	    currentPlaylist = [];
+	    currentTrackIndex = -1;
+	  }
+
+	  if (!playlistHasMore || playlistLoading) return;
+
+	  playlistLoading = true;
+
+	  fetch(`/media/playlist?name=${encodeURIComponent(name)}&offset=${playlistOffset}&limit=${playlistLimit}`)
+	    .then(res => res.json())
+	    .then(files => {
+	      if (!Array.isArray(files) || files.length === 0) {
+	        playlistHasMore = false;
+	        playlistLoading = false;
+	        return;
+	      }
+
+	      files.forEach((file, i) => {
+	        const li = document.createElement("li");
+	        // Show filename only, not full path, for nicer UI
+	        li.textContent = file.split("/").pop();
+			// Updated click handler here:
+			li.onclick = () => {
+			  currentTrackIndex = Array.from(playlistItems.children).indexOf(li);
+			  playMedia(file, true, true);  // usePopup = true, fromPlaylist = true
+			};
+	        playlistItems.appendChild(li);
+
+			if (reset && i === 0 && playlistOffset === 0) {
+			  currentTrackIndex = 0;
+			  playMedia(file, true, true);
+			}
+			
+	        currentPlaylist.push(file);
+	      });
+
+	      playlistOffset += files.length;
+	      playlistLoading = false;
+	      playlistPopup.style.display = "block";
+	    })
+	    .catch(() => {
+	      playlistLoading = false;
+	    });
+	}
+
+	  // Add scroll listener to playlistItems ul
+	  playlistItems.addEventListener('scroll', () => {
+	    const scrollThreshold = 20; // px from bottom to trigger load
+
+	    if (playlistItems.scrollHeight - playlistItems.scrollTop - playlistItems.clientHeight < scrollThreshold) {
+	      loadPlaylist(currentPlaylistName, false);
+	    }
+	  });
+
+	  function fixPathFirstDirLowercase(path) {
+//	    const parts = path.split("/", 2);
+//	    if (parts.length > 1) {
+//	      parts[0] = parts[0].toLowerCase();
+//	      return parts[0] + "/" + path.slice(parts[0].length + 1);
+//	    }
+	    return path;
+	  }
+	  
+	  function nextInPlaylist() {
+	    if (currentTrackIndex < currentPlaylist.length - 1) {
+	      currentTrackIndex++;
+	      playMedia(currentPlaylist[currentTrackIndex], true, true);
+	    } else {
+	      // Try to load more if available
+	      const before = currentPlaylist.length;
+	      loadPlaylist(currentPlaylistName, false);
+	      setTimeout(() => {
+	        if (currentPlaylist.length > before) {
+	          currentTrackIndex++;
+	          playMedia(currentPlaylist[currentTrackIndex], true, true);
+	        }
+	      }, 500); // Small delay to allow loading
+	    }
+	  }
+
+	  function prevInPlaylist() {
+	    if (currentTrackIndex > 0) {
+	      currentTrackIndex--;
+	      playMedia(currentPlaylist[currentTrackIndex], true, true);
+	    }
+	  }
+	  
+	  function closePlaylist() {
+	    playlistPopup.style.display = "none";
+	    popupPlayer.innerHTML = "";
+	    playlistItems.innerHTML = "";
+	    
+	    currentPlaylist = [];
+	    currentTrackIndex = -1;
+	    currentPlaylistName = null;
+	    playlistOffset = 0;
+	    playlistHasMore = true;
+	    playlistLoading = false;
+	  }
+
+	function shufflePlaylist() {
+	  if (currentPlaylist.length <= 1) return;
+
+	  let randomIndex;
+	  do {
+	    randomIndex = Math.floor(Math.random() * currentPlaylist.length);
+	  } while (randomIndex === currentTrackIndex);
+
+	  currentTrackIndex = randomIndex;
+	  playMedia(currentPlaylist[randomIndex], true);
+	}
+	
+    backButton.onclick = () => {
+      const parts = currentPath.split("/");
+      parts.pop();
+      currentPath = parts.join("/");
+      renderFolder(currentPath);
+    };
+
+    // Init
+    fetchAndRender();
+  </script>
+
+</body>
+</html>
