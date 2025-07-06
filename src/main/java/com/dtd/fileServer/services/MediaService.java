@@ -1,5 +1,7 @@
 package com.dtd.fileServer.services;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -11,26 +13,27 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.io.*;
-import java.nio.file.FileVisitOption;
-import java.nio.file.FileVisitResult;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 
 @Service
 public class MediaService {
 
     @Value("${media.dir}")
     private String mediaDir;
-
+    private static final Logger log = LoggerFactory.getLogger(MediaService.class);
     public ResponseEntity<Resource> getMedia(String filename, String rangeHeader, @RequestParam(required = false) Boolean fromPlaylist) throws IOException {
 
         // If the media request is from a playlist, prepend "Music/" folder to the filename path
+    	// When you play from playlist the path drops "Music", for some reason
+    	// Think it has to do with how it resolves the paths when looking through folders 
         if (Boolean.TRUE.equals(fromPlaylist)) {
             filename = "Music/" + filename;
         }
@@ -41,13 +44,13 @@ public class MediaService {
 
         // 🚫 Security check to prevent path traversal attacks outside the media directory
         if (!resolvedPath.startsWith(mediaRoot)) {
-            System.err.println("[MediaService] Invalid file path (path traversal attempt): " + filename);
+            log.error("[MediaService] Invalid file path (path traversal attempt): " + filename);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
 
         // ❌ Return 404 if file does not exist or is not a regular file
         if (!Files.exists(resolvedPath) || !Files.isRegularFile(resolvedPath)) {
-            System.err.println("[MediaService] File not found: " + resolvedPath);
+            log.error("[MediaService] File not found: " + resolvedPath);
             return ResponseEntity.notFound().build();
         }
 
@@ -116,71 +119,71 @@ public class MediaService {
         if (lower.endsWith(".flac")) return MediaType.valueOf("audio/flac");
         if (lower.endsWith(".ogg")) return MediaType.valueOf("audio/ogg");
 
+        if (lower.endsWith(".epub")) return MediaType.valueOf("application/epub+zip");  // <-- add epub content type
+
         // Default binary stream if unknown type
         return MediaType.APPLICATION_OCTET_STREAM;
     }
-
+    
     // Recursively list media files under mediaDir with supported extensions
-    public List<String> listMediaFiles() {
+    public List<String> listMediaFiles(String currentPath) {
         Path basePath = Paths.get(mediaDir);
-        if (!Files.exists(basePath) || !Files.isDirectory(basePath)) {
-            System.out.println("Invalid media directory: " + mediaDir);
+        Path targetPath = currentPath.isEmpty() ? basePath : basePath.resolve(currentPath);
+
+        if (!Files.exists(targetPath) || !Files.isDirectory(targetPath)) {
+            log.warn("Invalid media path: " + targetPath);
             return List.of();
         }
 
-        List<String> results = new ArrayList<>();
-        try {
-            Files.walkFileTree(
-                basePath,
-                EnumSet.noneOf(FileVisitOption.class),  // Do NOT follow symbolic links
-                Integer.MAX_VALUE,
-                new SimpleFileVisitor<>() {
-                    @Override
-                    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                        Path rel = basePath.relativize(dir);
-                        // Skip "lost+found" directory if present
-                        if (rel.getNameCount() > 0 && rel.getName(0).toString().equals("lost+found")) {
-                            return FileVisitResult.SKIP_SUBTREE;
-                        }
-                        return FileVisitResult.CONTINUE;
+        try (Stream<Path> stream = Files.walk(targetPath)) {
+            List<String> items = stream
+                // Skip the root folder itself
+                .filter(p -> !p.equals(targetPath))
+                // Filter only supported files or directories
+                .filter(p -> {
+                    if (Files.isDirectory(p)) {
+                        String folderName = p.getFileName().toString();
+                        return !folderName.equalsIgnoreCase("lost+found");
+                    } else {
+                        return isSupportedMediaFile(p.getFileName().toString());
                     }
+                })
+                // Map to relative path from basePath, normalized with '/' separator
+                .map(p -> basePath.relativize(p).toString().replace("\\", "/"))
+                .filter(relPath -> !relPath.isBlank() && !relPath.equals("/") && !relPath.equals("."))
+                .map(relPath -> {
+                    Path absPath = basePath.resolve(relPath);
+                    if (Files.isDirectory(absPath)) {
+                        return relPath.endsWith("/") ? relPath : relPath + "/";
+                    }
+                    return relPath;
+                })
+                .sorted(String::compareToIgnoreCase)
+                .collect(Collectors.toList());
 
-                    @Override
-                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                        String name = basePath.relativize(file).toString().replace("\\", "/");
-                        // Check for supported media file extensions, keep original case
-                        if (name.endsWith(".mp3")
-                                || name.endsWith(".mp4")
-                                || name.endsWith(".wav")
-                                || name.endsWith(".avi")
-                                || name.endsWith(".mkv")
-                                || name.endsWith(".webm")
-                                || name.endsWith(".ogg")
-                                || name.endsWith(".flac")
-                                || name.endsWith(".m3u")) {
-                            results.add(name);
-                        }
-                        return FileVisitResult.CONTINUE;
-                    }
-
-                    @Override
-                    public FileVisitResult visitFileFailed(Path file, IOException exc) {
-                        // Log and skip files/directories that cannot be accessed
-                        System.err.println("Failed to visit file: " + file + " - " + exc.getMessage());
-                        return FileVisitResult.CONTINUE;
-                    }
+            items.forEach(item -> {
+                if (item.isBlank()) {
+                    log.warn("Empty or blank virtual item detected!");
                 }
-            );
+            });
+            
+            return items;
+
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Failed listing media path: " + targetPath, e);
             return List.of();
         }
-
-        // Sort media files alphabetically before returning
-        results.sort(String::compareTo);
-        return results;
     }
 
+    private boolean isSupportedMediaFile(String name) {
+        String lower = name.toLowerCase();
+        return lower.endsWith(".mp3") || lower.endsWith(".mp4") || lower.endsWith(".wav")
+            || lower.endsWith(".avi") || lower.endsWith(".mkv") || lower.endsWith(".webm")
+            || lower.endsWith(".ogg") || lower.endsWith(".flac") || lower.endsWith(".m3u")
+            || lower.endsWith(".epub");  // <-- add epub here
+    }
+
+    
     // List all playlist names (without .m3u extension) in the playlists subfolder of mediaDir
     public List<String> listPlaylists() {
         List<String> names = new ArrayList<>();
@@ -201,7 +204,7 @@ public class MediaService {
                       names.add(name);
                   });
         } catch (IOException e) {
-            e.printStackTrace();
+           log.error("Error during listPlaylists", e);
         }
 
         return names;
@@ -221,7 +224,7 @@ public class MediaService {
 
         // Validate playlist file existence
         if (!Files.exists(playlistPath) || !Files.isRegularFile(playlistPath)) {
-            System.err.println("[MediaService] Playlist file not found: " + playlistPath);
+            log.error("[MediaService] Playlist file not found: " + playlistPath);
             return playlist;
         }
 
@@ -257,11 +260,11 @@ public class MediaService {
                     playlist.add(relativePath);
                     collected++;
                 } else {
-                    System.out.println("[MediaService] Skipping invalid or missing path in playlist: " + decoded);
+                    log.warn("[MediaService] Skipping invalid or missing path in playlist: " + decoded);
                 }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Error during load playlists", e);
         }
 
         return playlist;

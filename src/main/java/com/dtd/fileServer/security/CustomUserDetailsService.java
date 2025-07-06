@@ -2,7 +2,10 @@ package com.dtd.fileServer.security;
 
 import com.dtd.fileServer.model.AppUser;
 import com.dtd.fileServer.repository.AppUserRepository;
-import org.springframework.security.core.userdetails.*;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
@@ -22,10 +25,9 @@ public class CustomUserDetailsService implements UserDetailsService {
         AppUser user = userRepository.findByUsername(username)
             .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
-        return new User(
-            user.getUsername(),
-            user.getPassword(),
-            Collections.singletonList(new SimpleGrantedAuthority(user.getRole()))
-        );
+        return User.withUsername(user.getUsername())
+            .password(user.getPassword())
+            .authorities(new SimpleGrantedAuthority(user.getRole()))
+            .build();
     }
 }
