@@ -98,6 +98,33 @@ export function fetchMediaTree() {
 export function renderFolder(path) {
   currentPath = path || ""; // update global currentPath
 
+  updateSearchVisibility(); // hide/show search bar based on path
+
+  const prefix = currentPath ? currentPath + "/" : "";
+  const searchQuery = getSearchQuery();
+
+  // Separate folders and files under currentPath
+  const { folders, files } = getFolderAndFileLists(prefix);
+
+  mediaTree.innerHTML = lastClickedGroupLabel ? `<h4>Group: ${lastClickedGroupLabel}</h4>` : "";
+
+  // Decide whether to show grouped A-Z view
+  const threshold = 10;
+  const topLevelGrouping = ["Movies", "Music", "Books","TV"];
+  const pathRoot = currentPath.split("/")[0];
+  const shouldGroup = topLevelGrouping.includes(pathRoot) && (folders.length + files.length > threshold);
+
+  if (shouldGroup) {
+    renderGroupedAZView(folders, files, prefix, searchQuery); // Render grouped view
+  } else {
+    renderSimpleListView(folders, files, prefix); // Render normal folders and files
+  }
+
+  backButton.style.display = currentPath ? "block" : "none"; // Toggle back button
+}
+
+// Show/hide the search input based on whether we're in root
+function updateSearchVisibility() {
   const searchInput = document.getElementById("media-search");
   if (searchInput) {
     if (!currentPath) {
@@ -107,10 +134,125 @@ export function renderFolder(path) {
       searchInput.style.display = "block";
     }
   }
-  
-  const prefix = currentPath ? currentPath + "/" : "";
-  const searchQuery = (document.getElementById("media-search")?.value || "").toLowerCase();
-  // Separate folders and files under currentPath
+}
+
+// Render A-Z group folders and files with optional pinned 'playlists'
+function renderGroupedAZView(folders, files, prefix, searchQuery) {
+  const letterGroups = {};
+
+  // Helper: get first letter uppercase or '#'
+  function getLetter(name) {
+    const c = name[0];
+    return /^[A-Z0-9]$/i.test(c) ? c.toUpperCase() : "#";
+  }
+
+  const ul = document.createElement("ul");
+
+  // Add pinned 'playlists' folder manually first
+  if (currentPath === "Music" || currentPath.startsWith("Music/")) {
+    const playlistsIndex = folders.findIndex((f) => f.toLowerCase() === "playlists");
+    if (playlistsIndex > -1) {
+      const folder = folders[playlistsIndex];
+      const li = document.createElement("li");
+      li.classList.add("folder", "playlist-folder-icon");
+      li.textContent = folder;
+      li.onclick = () => {
+        lastClickedGroupLabel = folder;
+        renderFolder(prefix + folder);
+      };
+      ul.appendChild(li);
+    }
+  }
+
+  // Group folders by letter
+  folders
+    .filter((f) => !searchQuery || f.toLowerCase().includes(searchQuery))
+    .forEach((folder) => {
+      const letter = getLetter(folder);
+      if (!letterGroups[letter]) letterGroups[letter] = new Set();
+      letterGroups[letter].add(folder + "/");
+    });
+
+  // Group files by letter
+  files
+    .filter((f) => !searchQuery || f.toLowerCase().includes(searchQuery))
+    .forEach((file) => {
+      const letter = getLetter(file);
+      if (!letterGroups[letter]) letterGroups[letter] = new Set();
+      letterGroups[letter].add(file);
+    });
+
+  // Now render A-Z groups
+  Object.keys(letterGroups)
+    .sort()
+    .forEach((letter) => {
+      const li = document.createElement("li");
+      li.classList.add("folder");
+      li.textContent = letter;
+
+      li.onclick = () => {
+        lastClickedGroupLabel = letter;
+        renderVirtualGroup(letter, Array.from(letterGroups[letter]).sort());
+        backButton.style.display = "block";
+      };
+
+      ul.appendChild(li);
+    });
+
+  const scrollContainer = document.createElement("div");
+  scrollContainer.id = "media-scroll";
+  scrollContainer.appendChild(ul);
+
+  mediaTree.appendChild(scrollContainer);
+}
+
+// Render normal folders and files
+function renderSimpleListView(folders, files, prefix) {
+  const ul = document.createElement("ul");
+
+  folders.forEach((folder) => {
+    const li = document.createElement("li");
+    li.classList.add("folder");
+    li.textContent = folder;
+    li.onclick = () => {
+      lastClickedGroupLabel = folder; // track real folder name
+      renderFolder(prefix + folder);
+    };
+    ul.appendChild(li);
+  });
+
+  files.forEach((file) => {
+    const li = document.createElement("li");
+
+    if (file.toLowerCase().endsWith(".m3u")) {
+	  console.log("Loading playlist:", prefix + file.slice(0, -4));
+      li.classList.add("playlist-file");
+      li.textContent = file;
+      li.onclick = () => loadPlaylist(prefix + file.slice(0, -4));
+    } else if (file.toLowerCase().endsWith(".epub")) {
+      li.classList.add("file");
+      li.textContent = file;
+
+      const link = document.createElement("a");
+      const encodedPath = encodeURIComponent(prefix + file);
+      link.href = `/epubReader.html?file=${encodedPath}`;
+      link.textContent = "📘 Read Online";
+      link.style.marginLeft = "1rem";
+
+      li.appendChild(link);
+    } else {
+      li.classList.add("file");
+      li.textContent = file;
+      li.onclick = () => playMedia(prefix + file);
+    }
+
+    ul.appendChild(li);
+  });
+
+  mediaTree.appendChild(ul);
+}
+// Extract folders and files under currentPath
+function getFolderAndFileLists(prefix) {
   const foldersSet = new Set();
   const filesList = [];
 
@@ -134,8 +276,9 @@ export function renderFolder(path) {
     }
   });
 
-  const folders = Array.from(foldersSet);
+  let folders = Array.from(foldersSet);
 
+  // Special handling to pin 'playlists' to top if in Music
   if (currentPath === "Music" || currentPath.startsWith("Music/")) {
     const playlistsIndex = folders.findIndex((f) => f.toLowerCase() === "playlists");
     if (playlistsIndex > -1) {
@@ -144,149 +287,19 @@ export function renderFolder(path) {
     }
   }
 
-  // Special handling to pin 'playlists' to top if in Music
-  let pinned = [];
-  let restFolders = folders;
-
-  if (currentPath === "Music" || currentPath.startsWith("Music/")) {
-    const playlistsIndex = folders.findIndex((f) => f.toLowerCase() === "playlists");
-    if (playlistsIndex > -1) {
-      pinned = [folders[playlistsIndex]];
-      restFolders = folders.slice(0, playlistsIndex).concat(folders.slice(playlistsIndex + 1));
-    }
-  }
-
   // Final folder sort order: pinned + sorted rest
-  const sortedFolders = pinned.concat(restFolders.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })));
-  const files = filesList.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  const pinned = folders.slice(0, 1); // either ['playlists'] or empty
+  const rest = folders.slice(1).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  const sortedFolders = pinned.concat(rest);
 
-  mediaTree.innerHTML = lastClickedGroupLabel ? `<h4>Group: ${lastClickedGroupLabel}</h4>` : "";
+  const sortedFiles = filesList.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
-  const threshold = 10;
-  const totalItems = folders.length + files.length;
+  return { folders: sortedFolders, files: sortedFiles };
+}
 
-  const topLevelGrouping = ["Movies", "Music", "Books"];
-  const pathRoot = currentPath.split("/")[0];
-  const shouldGroup = topLevelGrouping.includes(pathRoot);
-
-  if (shouldGroup && totalItems > threshold) {
-    const letterGroups = {};
-
-    // Separate 'playlists' if we're in Music
-    let pinnedFolders = [];
-    if (currentPath === "Music" || currentPath.startsWith("Music/")) {
-      const playlistsIndex = folders.findIndex((f) => f.toLowerCase() === "playlists");
-      if (playlistsIndex > -1) {
-        pinnedFolders = [folders[playlistsIndex]];
-        folders.splice(playlistsIndex, 1); // remove playlists from normal group
-      }
-    }
-
-    // Helper: get first letter uppercase or '#'
-    function getLetter(name) {
-      const c = name[0];
-      return /^[A-Z0-9]$/i.test(c) ? c.toUpperCase() : "#";
-    }
-
-	folders
-	  .filter((f) => !searchQuery || f.toLowerCase().includes(searchQuery))
-	  .forEach((folder) => {
-      const letter = getLetter(folder);
-      if (!letterGroups[letter]) letterGroups[letter] = new Set();
-      letterGroups[letter].add(folder + "/");
-    });
-
-	files
-	  .filter((f) => !searchQuery || f.toLowerCase().includes(searchQuery))
-	  .forEach((file) => {
-      const letter = getLetter(file);
-      if (!letterGroups[letter]) letterGroups[letter] = new Set();
-      letterGroups[letter].add(file);
-    });
-
-    const ul = document.createElement("ul");
-
-    // Add pinned 'playlists' folder manually first
-    pinnedFolders.forEach((folder) => {
-      const li = document.createElement("li");
-      li.classList.add("folder", "playlist-folder-icon");
-      li.textContent = folder;
-      li.onclick = () => {
-        lastClickedGroupLabel = folder;
-        renderFolder(prefix + folder);
-      };
-      ul.appendChild(li);
-    });
-
-    // Now render A-Z groups
-    Object.keys(letterGroups)
-      .sort()
-      .forEach((letter) => {
-        const li = document.createElement("li");
-        li.classList.add("folder");
-        li.textContent = letter;
-
-        li.onclick = () => {
-          lastClickedGroupLabel = letter;
-          renderVirtualGroup(letter, Array.from(letterGroups[letter]).sort());
-          backButton.style.display = "block";
-        };
-
-        ul.appendChild(li);
-      });
-
-    const scrollContainer = document.createElement("div");
-    scrollContainer.id = "media-scroll";
-    scrollContainer.appendChild(ul);
-
-    mediaTree.appendChild(scrollContainer);
-  } else {
-    // Render normal folders and files
-
-    const ul = document.createElement("ul");
-
-    sortedFolders.forEach((folder) => {
-      const li = document.createElement("li");
-      li.classList.add("folder");
-      li.textContent = folder;
-      li.onclick = () => {
-        lastClickedGroupLabel = folder; // track real folder name
-        renderFolder(prefix + folder);
-      };
-      ul.appendChild(li);
-    });
-
-	files.forEach((file) => {
-	  const li = document.createElement("li");
-
-	  if (file.toLowerCase().endsWith(".m3u")) {
-	    li.classList.add("playlist-file");
-	    li.textContent = file;
-	    li.onclick = () => loadPlaylist(prefix + file.slice(0, -4));
-	  } else if (file.toLowerCase().endsWith(".epub")) {
-	    li.classList.add("file");
-	    li.textContent = file;
-
-	    const link = document.createElement("a");
-	    const encodedPath = encodeURIComponent(prefix + file);
-	    link.href = `/epubReader.html?file=${encodedPath}`;
-	    link.textContent = "📘 Read Online";
-	    link.style.marginLeft = "1rem";
-
-	    li.appendChild(link);
-	  } else {
-	    li.classList.add("file");
-	    li.textContent = file;
-	    li.onclick = () => playMedia(prefix + file);
-	  }
-
-	  ul.appendChild(li);
-	});
-
-    mediaTree.appendChild(ul);
-  }
-
-  backButton.style.display = currentPath ? "block" : "none";
+// Get the current lowercase search input
+function getSearchQuery() {
+  return (document.getElementById("media-search")?.value || "").toLowerCase();
 }
 
 const searchInput = document.getElementById("media-search");
@@ -370,13 +383,19 @@ export function playMedia(filename, usePopup = false, fromPlaylist = false) {
 
   // Determine media type for source element
   const type = ext === "mp3" ? "mpeg" : ext;
-  const element = ["mp4", "webm", "ogg"].includes(ext)
-    ? `<video controls autoplay><source src="${src}" type="video/${ext}">Video not supported.</video>`
-    : `<audio controls autoplay><source src="${src}" type="audio/${type}">Audio not supported.</audio>`;
+  const isVideo = ["mp4", "webm", "ogg"].includes(ext);
+  
+  // Remove extension for display
+  const displayName = filename.split("/").pop().replace(/\.[^/.]+$/, ""); 
+
+  const header = `<div style="font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem;">🎵 ${displayName}</div>`;
+  const mediaHTML = isVideo
+    ? `<video controls autoplay style="width: 100%;"><source src="${src}" type="video/${ext}">Video not supported.</video>`
+    : `<audio controls autoplay style="width: 100%;"><source src="${src}" type="audio/${type}">Audio not supported.</audio>`;
 
   // Choose target container
   const target = usePopup ? popupPlayer : player;
-  target.innerHTML = element;
+  target.innerHTML = `${header}${mediaHTML}`;
 
   // Apply volume/mute settings persistence
   const mediaElement = target.querySelector("audio, video");
@@ -426,6 +445,17 @@ export function applyPlayerSettings(playerElement) {
 backButton.onclick = () => {
   if (!currentPath) return;
 
+  const isInMusic = currentPath === "Music" || currentPath.startsWith("Music/");
+  const isVirtualGroup = /^[A-Z0-9#]$/.test(lastClickedGroupLabel); // Virtual group is single A-Z, 0-9, or #
+
+  if (isInMusic && isVirtualGroup) {
+    // Go back to virtual A–Z view
+    lastClickedGroupLabel = "";
+    renderFolder(currentPath); // Re-render group view (A-Z folders + pinned playlists)
+    return;
+  }
+
+  // Normal folder navigation
   const parts = currentPath.split("/");
   parts.pop();
   currentPath = parts.join("/");
@@ -438,6 +468,5 @@ backButton.onclick = () => {
 
   fetchAndRenderPath(currentPath);
 };
-
 // Initial load
 fetchMediaTree();

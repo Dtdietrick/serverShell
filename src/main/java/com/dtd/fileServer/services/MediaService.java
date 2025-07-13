@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.io.*;
-import java.nio.file.DirectoryStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -216,14 +216,16 @@ public class MediaService {
     }
 
     // Load playlist with pagination (offset and limit)
-    public List<String> loadPlaylist(String name, int offset, int limit) {
+    public List<String> loadPlaylist(String name, int offset, int limit) 
+    {
         List<String> playlist = new ArrayList<>();
         Path playlistPath = Paths.get(mediaDir, name + ".m3u").normalize();
         // musicDir is assumed two levels up from playlist file (e.g. mediaDir/music)
         Path musicDir = playlistPath.getParent().getParent();
 
         // Validate playlist file existence
-        if (!Files.exists(playlistPath) || !Files.isRegularFile(playlistPath)) {
+        if (!Files.exists(playlistPath) || !Files.isRegularFile(playlistPath))
+        {
             log.error("[MediaService] Playlist file not found: " + playlistPath);
             return playlist;
         }
@@ -231,7 +233,8 @@ public class MediaService {
         int skipped = 0;
         int collected = 0;
 
-        try (BufferedReader reader = Files.newBufferedReader(playlistPath)) {
+        try (BufferedReader reader = Files.newBufferedReader(playlistPath, StandardCharsets.UTF_8))
+        {
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
@@ -239,7 +242,7 @@ public class MediaService {
                 if (line.isEmpty() || line.startsWith("#")) continue;
 
                 // Decode URL-encoded paths and normalize separators
-                String decoded = java.net.URLDecoder.decode(line, java.nio.charset.StandardCharsets.UTF_8);
+                String decoded = java.net.URLDecoder.decode(line, StandardCharsets.UTF_8);
                 decoded = decoded.replace("\\", "/");
 
                 // Resolve path against music directory

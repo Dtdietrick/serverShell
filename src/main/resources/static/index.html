@@ -8,6 +8,7 @@
 <body>
   <h2>The Stash</h2>
   <button onclick="logout()">🚪 Logout</button>
+  <button id="emulator-button">🕹 Emulator</button>
   <div id="back-button">⬅️ Back</div>
   
   <input
@@ -31,7 +32,7 @@
     <div id="playlist-controls" style="margin: 1rem 0; text-align: center;">
       <button onclick="prevInPlaylist()">⏮ Prev</button>
       <button onclick="nextInPlaylist()">⏭ Next</button>
-      <button onclick="shufflePlaylist()">🔀 Shuffle</button>
+      <button id="shuffle-button" onclick="shufflePlaylist()">🔀 Shuffle</button>
     </div>
 
     <div id="popup-player"></div>
@@ -86,6 +87,58 @@
 
     // Kick off initial load
     fetchMediaTree();
+  </script>
+  
+  <!-- Emulator overlay (initially hidden) -->
+  <div id="emulator-overlay" style="
+       display: none;
+       position: fixed;
+       top: 0; left: 0;
+       width: 100%; height: 100%;
+       background: rgba(0,0,0,0.8);
+       z-index: 9999;
+       align-items: center;
+       justify-content: center;
+  ">
+    <div style="position: relative; width: 90%; height: 90%;">
+      <button id="close-emulator" style="
+          position: absolute; top: 1rem; right: 1rem;
+          font-size: 1.5rem; z-index: 10000;
+      ">✖</button>
+
+      <!-- Empty iframe; we'll set src via JS -->
+      <iframe
+        id="emulator-frame"
+        style="width: 100%; height: 100%; border: none;"
+        allowfullscreen
+      ></iframe>
+    </div>
+  </div>
+
+  <script>
+    const emulatorBtn = document.getElementById("emulator-button");
+    const overlay     = document.getElementById("emulator-overlay");
+    const closeBtn    = document.getElementById("close-emulator");
+    const iframe      = document.getElementById("emulator-frame");
+
+    const origin  = window.location.origin;                    // http://localhost:8080
+    const feedUrl = `${origin}/feeds/gb-feed.json`;            // your feed
+    const emuUrl = `${origin}/webrcade/play/index.html?feed=${feedUrl}`; // ← here is the emulator feed
+
+    console.log("🕹️ Emulator URL will be:", emuUrl);
+
+    iframe.onload  = () => console.log("✅ Emulator iframe loaded");
+    iframe.onerror = () => console.error("❌ Emulator iframe failed to load");
+
+    emulatorBtn.addEventListener("click", () => {
+      overlay.style.display = "flex";
+      iframe.src = emuUrl;
+    });
+
+    closeBtn.addEventListener("click", () => {
+      overlay.style.display = "none";
+      iframe.src = "about:blank";
+    });
   </script>
 </body>
 </html>

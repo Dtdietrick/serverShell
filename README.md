@@ -58,14 +58,22 @@ Troubleshooting
 - [✅] Better listing - maybe have submenu by letter that shows all items that start with the letter (v1.2)
 - [✅] beautify UI - part 1 (v1.2)
 - [✅] Search bar (v1.4)
+- [✅] fix back button on virtual directories (v1.5)
+  [✅] current file banner (v1.5)
+- [ ] view toggle
+- [ ] eupub user controls
 - [ ] Show some onscreen error if there was a problem with media playback
 - [ ] logup service, maybe (only send a request, dont auto add to user list)
-- [ ] user self service portal (user login stats and change password)
+- [ ] user self service portal (user login stats, recent views, and change password)
 - [✅] breakup index.html (v1.3)
 - [ ] beautify UI - part 2
-- [✅] change avi and mkv to mp4 - In Progress (no code change)
+- [✅] Ereader functionality (v1.3)
+- [ ] split out into microservices (why am i using spring?)
+- [ ] user media request service
+  [✅] GameBoy Emulator functionality (v1.6)
+- [ ] N64 Emulator functionality (more complex, has to handle controller inputs)
+
+##None code TODO
+- [✅] change avi and mkv to mp4 - In Progress
 - [ ] fix curated list of epubs to add
 - [ ] fix more playlists
-- [✅] Ereader functionality (v1.3)
-- [ ] user media request service
-- [ ] N64 Emulator functionality

@@ -1,0 +1,28 @@
+ 
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron&display=swap');
+  
+  .webrcade-logo {
+    user-select: none;
+    font-size: 3rem;  
+    display: inline-block;
+    margin: 0 auto;
+    font-family: 'Orbitron';
+    display: flex;
+    align-items: center;
+    color: #CCC;
+    padding: .55rem;  
+  }
+
+  .webrcade-logo-left-text {
+    margin-right: .05rem;
+  }
+
+  .webrcade-logo-right-text {
+    margin-left: .05rem;    
+  }
+
+  .webrcade-logo-image {
+    height: 4rem;     
+    /* opacity: .7; */
+  }
+

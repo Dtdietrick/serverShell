@@ -117,6 +117,12 @@ li span,
   margin-top: -0.5rem;
 }
 
+button.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
 /* Media elements */
 audio,
 video {

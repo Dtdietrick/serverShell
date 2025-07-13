@@ -3,12 +3,18 @@ package com.dtd.fileServer.controller;
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.AntPathMatcher;
@@ -25,6 +31,10 @@ import jakarta.servlet.http.HttpServletRequest;
 @RestController
 @RequestMapping("/media")
 public class MediaController {
+	
+    @Value("${media.dir}")
+    private String mediaDir;
+    
 	private static final Logger log = LoggerFactory.getLogger(MediaController.class);
 	private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.fileServer.audit");
     private final MediaService mediaService;
@@ -76,6 +86,10 @@ public class MediaController {
         // Matches any GET request starting with /media/ to serve media files
         String pattern = "/media/**";
 
+        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
+            log.warn("Unauthorized media access attempt for path: {}", requestedPath);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         // Get the full request URI
         String fullPath = request.getRequestURI();
 
@@ -85,6 +99,15 @@ public class MediaController {
         // URL-decode the extracted path to handle encoded characters
         String path = URLDecoder.decode(encodedPath, StandardCharsets.UTF_8);
 
+        // Assume mediaRoot is the base directory on disk where media files reside
+        Path mediaRoot = Paths.get(mediaDir).normalize();
+        Path requestedFile = mediaRoot.resolve(path).normalize();
+        
+        if (!requestedFile.startsWith(mediaRoot) || !Files.exists(requestedFile)) {
+            log.warn("Invalid or missing media file request: {}", requestedFile);
+            return ResponseEntity.notFound().build();
+        }
+        
         // Delegate to MediaService to serve the media file with support for range requests and playlist context
         return mediaService.getMedia(path, rangeHeader, fromPlaylist);
     }

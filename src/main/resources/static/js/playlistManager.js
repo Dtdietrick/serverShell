@@ -33,7 +33,13 @@ export function loadPlaylist(name, reset = true) {
   if (!playlistHasMore || playlistLoading) return;
 
   playlistLoading = true;
-
+  
+  const shuffleButton = document.getElementById("shuffle-button");
+  if (shuffleButton) {
+    shuffleButton.disabled = playlistLoading || currentPlaylist.length <= 1;
+    shuffleButton.classList.toggle("disabled", shuffleButton.disabled);
+  }
+  
   fetch(
     `/media/playlist?name=${encodeURIComponent(
       name
@@ -71,6 +77,12 @@ export function loadPlaylist(name, reset = true) {
     })
     .catch(() => {
       playlistLoading = false;
+	  
+	  const shuffleButton = document.getElementById("shuffle-button");
+	  if (shuffleButton) {
+	    shuffleButton.disabled = playlistLoading || currentPlaylist.length <= 1;
+	    shuffleButton.classList.toggle("disabled", shuffleButton.disabled);
+	  }
     });
 }
 
@@ -112,6 +124,12 @@ export function closePlaylist() {
   popupPlayer.innerHTML = "";
   playlistItems.innerHTML = "";
 
+  // Clear the playlist search input value too
+  const playlistSearchInput = document.getElementById("playlist-search");
+  if (playlistSearchInput) {
+    playlistSearchInput.value = "";
+  }
+
   currentPlaylist = [];
   currentTrackIndex = -1;
   currentPlaylistName = null;
@@ -124,6 +142,11 @@ export function closePlaylist() {
  * Shuffle playlist and play a random track.
  */
 export function shufflePlaylist() {
+  if (playlistLoading) {
+    console.warn("Playlist still loading. Try again in a second.");
+    return;
+  }
+
   if (currentPlaylist.length <= 1) return;
 
   let randomIndex;
@@ -132,7 +155,7 @@ export function shufflePlaylist() {
   } while (randomIndex === currentTrackIndex);
 
   currentTrackIndex = randomIndex;
-  playMedia(currentPlaylist[randomIndex], true);
+  playMedia(currentPlaylist[randomIndex], true, true);
 }
 
 // Export helper needed by playlist (playMedia is in mediaExplorer.js)
@@ -150,6 +173,17 @@ function playMedia(...args) {
     console.warn("playMedia callback not set!");
   }
 }
+
+const playlistSearchInput = document.getElementById("playlist-search");
+const playlistItemsList = document.getElementById("playlist-items");
+
+playlistSearchInput?.addEventListener("input", () => {
+  const query = playlistSearchInput.value.toLowerCase();
+  Array.from(playlistItemsList.children).forEach((li) => {
+    const text = li.textContent.toLowerCase();
+    li.style.display = text.includes(query) ? "" : "none";
+  });
+});
 
 // Export an init function to setup any event listeners or initial state
 export function initPlaylist() {

@@ -30,9 +30,23 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
             .csrf(csrf -> csrf.disable())
+            .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
             .authorizeHttpRequests(auth -> auth
-            		.requestMatchers("/testEpubReader.html", "/login", "/logout", "/css/**", "/js/**", "/style.css", "/epubReader.html", "/epubs/**").permitAll()  // added /style.css if using root
-                .requestMatchers("/index.html", "/", "/media/**").authenticated()
+                // ✅ Allow full access to emulator and feeds
+                .requestMatchers(
+                    "/webrcade/**",         // Covers index.html, play/, app/, etc.
+                    "/feeds/**",
+                    "/roms/**"              // ROMs must be accessible directly
+                ).permitAll()
+
+                // ✅ Other public static assets (optional)
+                .requestMatchers(
+                    "/login", "/logout",
+                    "/css/**", "/js/**", "/style.css", "/epubReader.html"
+                ).permitAll()
+
+                // 🔐 Auth required for app
+                .anyRequest().authenticated()
             )
             .formLogin(form -> form
                 .loginPage("/login")
@@ -49,5 +63,4 @@ public class SecurityConfig {
             )
             .build();
     }
-
 }
