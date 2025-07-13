@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.dtd</groupId>
 	<artifactId>localFileServer</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.1.6</version>
 	<name>localFileServer</name>
 	<description>Setup local file server</description>
 	<url/>
