@@ -1,5 +1,8 @@
 package com.dtd.fileServer.model;
 
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
@@ -57,4 +60,27 @@ public class AppUser {
     public void setRole(String role) {
         this.role = role;
     }
+    
+    //User Profile Settings
+    private List<String> recentViews;
+
+    public List<String> getRecentViews() {
+        return recentViews;
+    }
+
+    public void setRecentViews(List<String> recentViews) {
+        this.recentViews = recentViews;
+    }
+    
+    //ROM Data
+    private Map<String, String> recentRomSaves; // key: rom name, value: save path or timestamp
+    
+    public Map<String, String> getRecentRomSaves() {
+        return recentRomSaves;
+    }
+
+    public void setRecentRomSaves(Map<String, String> recentRomSaves) {
+        this.recentRomSaves = recentRomSaves;
+    }
+    
 }

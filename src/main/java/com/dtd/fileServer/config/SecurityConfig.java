@@ -32,21 +32,17 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
             .authorizeHttpRequests(auth -> auth
-                // ✅ Allow full access to emulator and feeds
-                .requestMatchers(
-                    "/webrcade/**",         // Covers index.html, play/, app/, etc.
-                    "/feeds/**",
-                    "/roms/**"              // ROMs must be accessible directly
-                ).permitAll()
-
-                // ✅ Other public static assets (optional)
-                .requestMatchers(
-                    "/login", "/logout",
-                    "/css/**", "/js/**", "/style.css", "/epubReader.html"
-                ).permitAll()
-
-                // 🔐 Auth required for app
-                .anyRequest().authenticated()
+            	    .requestMatchers(
+            	        "/webrcade/**",
+            	        "/feeds/**",
+            	        "/feeds/user-feed.json",
+            	        "/roms/**",
+            	        "/saves/**",       
+            	        "/rom-reader/**",
+            	        "/login", "/logout",
+            	        "/css/**", "/js/**", "/style.css", "/epubReader.html"
+            	    ).permitAll()
+            	    .anyRequest().authenticated()
             )
             .formLogin(form -> form
                 .loginPage("/login")

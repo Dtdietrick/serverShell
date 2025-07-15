@@ -25,12 +25,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.dtd.fileServer.services.MediaService;
+import com.dtd.fileServer.services.UserProfileService;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/media")
 public class MediaController {
+	
 	
     @Value("${media.dir}")
     private String mediaDir;
@@ -39,9 +41,11 @@ public class MediaController {
 	private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.fileServer.audit");
     private final MediaService mediaService;
     private final AntPathMatcher pathMatcher = new AntPathMatcher(); // Used for pattern matching URI paths
-
-    public MediaController(MediaService mediaService) {
-        this.mediaService = mediaService; // Inject MediaService dependency
+    private final UserProfileService userProfileService;
+    
+    public MediaController(MediaService mediaService, UserProfileService userProfileService) {
+        this.mediaService = mediaService;
+        this.userProfileService = userProfileService;
     }
     @GetMapping("/list")
     public ResponseEntity<List<String>> listMediaFiles(@RequestParam(name = "path", defaultValue = "") String currentPath) {
@@ -107,6 +111,9 @@ public class MediaController {
             log.warn("Invalid or missing media file request: {}", requestedFile);
             return ResponseEntity.notFound().build();
         }
+        
+        // Record the view in the user profile
+        userProfileService.recordView(username, path);
         
         // Delegate to MediaService to serve the media file with support for range requests and playlist context
         return mediaService.getMedia(path, rangeHeader, fromPlaylist);

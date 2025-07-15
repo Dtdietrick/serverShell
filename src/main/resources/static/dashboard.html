@@ -1,0 +1,27 @@
+<h2>Recently Viewed Items</h2>
+<ul id="recent-views"></ul>
+
+<h2>ROM Saves</h2>
+<ul id="rom-saves"></ul>
+
+<script>
+  fetch('/user/dashboard')
+    .then(res => res.json())
+    .then(data => {
+      const viewsList = document.getElementById('recent-views');
+      data.recentViews.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item;
+        viewsList.appendChild(li);
+      });
+
+      const savesList = document.getElementById('rom-saves');
+      if (data.recentRomSaves) {
+        Object.entries(data.recentRomSaves).forEach(([rom, file]) => {
+          const li = document.createElement('li');
+          li.textContent = `${rom} → ${file}`;
+          savesList.appendChild(li);
+        });
+      }
+    });
+</script>

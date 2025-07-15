@@ -35,6 +35,32 @@ API Endpoints
         Example:
         http://192.168.1.99:8080/epubReader.html?file=Books%2FFiction%20Books%2FCervantes%2C%20Miguel%20De%2FDon%20Quixote.epub
 
+	🕹 Game Boy Emulator Integration (WebRcade Patch)
+	This project includes a customized version of the WebRcade GBA emulator, with save-state support integrated into the local file server.
+
+	✅ Features:
+	Embedded Game Boy Advance emulator (webrcade-app-vba-m)
+
+[Your File Server HTML/UI]
+    |
+    |  📦 Launch button → loads iframe:
+    v
+[WebRCade UI Shell (/webrcade/play/index.html)]
+    |
+    |  📂 Feed-based launch of GBA emulator:
+    v
+[GBA Emulator Core (/webrcade/play/app/gba/)]
+    |
+    |  🧠 Exposes `window.wrc` + handles FS/Module
+    |
+    |  💾 Writes save data into MEMFS → IDBFS
+	
+
+🧪 Debug Tips:
+Use window.wrc.getSaveBlob().then(console.log) in browser console to verify save exists
+
+Ensure window.FS.syncfs is defined inside the emulator iframe (after flush)
+
 
 Security Notes
 
@@ -71,6 +97,7 @@ Troubleshooting
 - [ ] split out into microservices (why am i using spring?)
 - [ ] user media request service
   [✅] GameBoy Emulator functionality (v0.1.6)
+  [] Better GameBoy Controls
 - [ ] N64 Emulator functionality (more complex, has to handle controller inputs)
 
 ##None code TODO
