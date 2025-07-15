@@ -16,9 +16,6 @@ export function patchEmulatorWRC(outerIframe, romName, waitForVfs) {
     const emulator = win?.app?.emulator;
 
     console.log("🔎 Checking inner iframe internals...");
-    console.log("📦 inner win:", win);
-    console.log("📦 inner win.app:", win?.app);
-    console.log("📦 inner win.app.emulator:", emulator);
     console.log("📦 inner win.app.emulator.saveManager:", emulator?.saveManager);
 
     if (emulator && emulator.saveManager) {
@@ -27,7 +24,9 @@ export function patchEmulatorWRC(outerIframe, romName, waitForVfs) {
         const module = emulator?.module || saveManager?.module;
         const FS = module?.FS;
         const title = emulator.getTitle?.();
-
+		
+		saveManager.emulator = emulator;
+		
         win.FS = FS;
         win.wrc = {
           ...(win.wrc || {}),
@@ -36,6 +35,8 @@ export function patchEmulatorWRC(outerIframe, romName, waitForVfs) {
           FS
         };
 
+		window.wrc = win.wrc;
+		
         console.log("✅ Emulator is initialized, starting save logic...");
         console.log("✅ Patched window.wrc after emulator load");
 

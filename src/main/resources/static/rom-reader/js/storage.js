@@ -1,42 +1,3 @@
-// Auto-upload polling loop: wait until save exists, then start interval uploads
-function waitForSaveFileAndStartAutoSave(romName, initialRetryDelayMs = 60000, uploadIntervalMs = 300000) {
-  let autoSaveStarted = false;
-
-  async function tryDetectSave() {
-    const manager = window.wrc?.getSaveManager?.();
-    if (!manager || typeof manager.getSaveBlob !== "function") {
-      console.log("⏳ SaveManager not ready yet — will retry.");
-      setTimeout(tryDetectSave, initialRetryDelayMs);
-      return;
-    }
-
-    try {
-      // Attempt to get the save blob
-      const blob = await window.getSaveStateBlob?.(); // <- manually calls saveState + flush
-      if (blob instanceof Blob) {
-        console.log("✅ First save blob detected — enabling auto-upload every", uploadIntervalMs / 1000, "seconds.");
-        autoSaveStarted = true;
-
-        // Start background auto-upload loop
-        setInterval(() => {
-          autoUploadSave(romName);
-        }, uploadIntervalMs);
-      } else {
-        console.log("⏳ No save blob found yet — will retry.");
-        setTimeout(tryDetectSave, initialRetryDelayMs);
-      }
-    } catch (err) {
-      console.warn("⚠️ Error while checking for save blob:", err);
-      setTimeout(tryDetectSave, initialRetryDelayMs);
-    }
-  }
-
-  // Only run detection if not already running
-  if (!autoSaveStarted) {
-    tryDetectSave();
-  }
-}
-
 // Clear browser storage before launching new emulator session
 async function fullClear() {
   console.log("🧹 Clearing emulator storage...");
@@ -51,8 +12,8 @@ async function fullClear() {
 }
 
 // Periodically uploads the user's save blob to the backend
-async function autoUploadSave(romName) {
-  const file = await getSaveBlob();
+async function autoUploadSave(romName, blobOverride = null) {
+  const file = blobOverride || await getSaveBlob();
 
   if (!file) {
     console.warn("❌ No save blob found for upload");
@@ -80,53 +41,43 @@ async function autoUploadSave(romName) {
 
 // Abstract saveBlob getter — uses WebRCade’s exposed helper
 async function getSaveBlob() {
-  const { emulator, iframeWin } = await waitForApp();
-  if (!emulator || !iframeWin) {
+  const saveManager = window?.wrc?.getSaveManager?.();
+  const emulator = saveManager?.emulator;
+  const iframeWin = window;
+
+  if (!emulator || typeof emulator.saveState !== "function") {
     console.warn("❌ Emulator not ready — cannot get save blob.");
     return null;
   }
 
-  // ✅ Force emulator to commit SRAM to /tmp/game.srm
   try {
+    console.log("📥 Calling saveState() to sync SRAM...");
     emulator.saveState();
-    console.log("📥 Called emulator.saveState() to sync SRAM.");
-  } catch (err) {
-    console.warn("⚠️ saveState() failed:", err);
-  }
 
-  // ✅ Flush FS → IDB
-  if (iframeWin.wrc?.flushSaveData) {
-    try {
-      console.log("💾 Flushing emulator save data before blob fetch...");
+    await new Promise(res => setTimeout(res, 100)); // small flush buffer
+
+    if (iframeWin.wrc?.flushSaveData) {
+      console.log("💾 Flushing VFS to IndexedDB...");
       await iframeWin.wrc.flushSaveData();
-    } catch (err) {
-      console.warn("⚠️ flushSaveData failed:", err);
     }
+  } catch (err) {
+    console.warn("⚠️ saveState() or flushSaveData() failed:", err);
   }
 
-  // 🔍 Attempt to get blob via WebRCade helper
   if (iframeWin.wrc?.getSaveBlob) {
     try {
-      const maybeResult = iframeWin.wrc.getSaveBlob();
+      const result = iframeWin.wrc.getSaveBlob();
+      const blob = typeof result.then === "function" ? await result : (typeof result === "function" ? await result() : null);
+      if (blob instanceof Blob) return blob;
 
-      if (maybeResult && typeof maybeResult.then === "function") {
-        const blob = await maybeResult;
-        if (blob instanceof Blob) return blob;
-      }
-
-      if (typeof maybeResult === "function") {
-        const nested = await maybeResult();
-        if (nested instanceof Blob) return nested;
-      }
-
-      console.warn("⚠️ getSaveBlob returned unknown type:", maybeResult);
+      console.warn("⚠️ getSaveBlob returned unknown:", result);
     } catch (err) {
       console.warn("❌ Error while calling getSaveBlob:", err);
     }
   }
 
   // 🔄 Fallback: Check IndexedDB directly
-  console.warn("⚠️ getSaveBlob not available — checking IndexedDB...");
+  console.warn("⚠️ getSaveBlob not available — checking IndexedDB directly...");
 
   return new Promise((resolve) => {
     const dbReq = indexedDB.open("webrcade");
@@ -154,6 +105,7 @@ async function getSaveBlob() {
               console.log("💾 Found save in STORAGE:", key);
               resolve(blob);
               return;
+			  
             }
           }
           cursor.continue();
@@ -167,6 +119,31 @@ async function getSaveBlob() {
 
     dbReq.onerror = () => resolve(null);
   });
+}
+
+// Auto-upload polling loop: waits for save blob then begins periodic uploads
+function waitForSaveFileAndStartAutoSave(romName, initialRetryDelayMs = 60000, uploadIntervalMs = 300000) {
+  let autoSaveStarted = false;
+
+  async function tryDetectSave() {
+    const blob = await getSaveBlob();
+
+    if (blob instanceof Blob) {
+      console.log("✅ First save blob detected — enabling auto-upload every", uploadIntervalMs / 1000, "seconds.");
+      autoSaveStarted = true;
+
+      setInterval(() => {
+        autoUploadSave(romName);
+      }, uploadIntervalMs);
+    } else {
+      console.log("⏳ No save blob found yet — will retry.");
+      setTimeout(tryDetectSave, initialRetryDelayMs);
+    }
+  }
+
+  if (!autoSaveStarted) {
+    tryDetectSave();
+  }
 }
 
 // ✅ Export
