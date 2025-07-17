@@ -9,9 +9,9 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.dtd</groupId>
-	<artifactId>localserverShell</artifactId>
+	<artifactId>serverShell</artifactId>
 	<version>0.1.9</version>
-	<name>localserverShell</name>
+	<name>serverShell</name>
 	<description>Setup local file server</description>
 	<url/>
 	<licenses>
