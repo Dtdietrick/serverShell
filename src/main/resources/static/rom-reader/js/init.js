@@ -1,102 +1,46 @@
-import { waitForVfsAndStartAutoSave, autoUploadSave, getSaveBlob } from './storage.js';
+import { waitForVfsAndStartAutoSave, autoUploadSave } from './storage.js';
 import { setupUploadForm } from './uploader.js';
-import { getSaveBlobFromEmulator, patchEmulatorWRC } from './emulator-ui.js';
-import { pollForActiveEmulatorFrame } from './emulator-ui.js';
+import { getSaveBlobFromEmulator, pollForActiveEmulatorFrame } from './emulator-ui.js';
 
-const urlParams     = new URLSearchParams(window.location.search);
-const rawRomName    = urlParams.get("rom") || null;
-const displayName   = rawRomName?.trim() || "";
-
-const overlay           = document.getElementById("emulator-overlay");
-const romSelector       = document.getElementById("rom-selector");
-const saveControls      = document.getElementById("save-controls");
-const emulatorBtn       = document.getElementById("emulator-button");
-const romNameText       = document.getElementById("save-rom-name");
-const overlaySaveBtn    = document.getElementById("overlay-save-btn");
-const launcherIframe     = document.getElementById("emulator-frame");
+const romList          = document.getElementById("rom-list");
+const romSelector      = document.getElementById("rom-selector");
+const saveControls     = document.getElementById("save-controls");
+const romNameText      = document.getElementById("save-rom-name");
+const overlay          = document.getElementById("emulator-overlay");
+const launcherIframe   = document.getElementById("emulator-frame");
+const overlaySaveBtn   = document.getElementById("overlay-save-btn");
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if (!rawRomName) {
+  try {
+    const response = await fetch('/rom-reader/feeds/user-feed.json');
+    const feed = await response.json();
+
+    const items = feed.categories.flatMap(c => c.items);
+
+    // Populate ROM list dynamically
+    items.forEach(item => {
+      const li = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = "#";
+      link.textContent = `Play ${item.title}`;
+      link.addEventListener("click", () => launchGame(item));
+      li.appendChild(link);
+      romList.appendChild(li);
+    });
+
     romSelector.style.display = "block";
-    return;
+  } catch (err) {
+    console.error("❌ Failed to load feed:", err);
   }
 
-  romNameText.textContent = displayName;
-  saveControls.style.display = "block";
-  emulatorBtn.style.display = "inline-block";
-
-  setupUploadForm(rawRomName);
-
-  emulatorBtn.addEventListener("click", async () => {
-    overlay.style.display = "flex";
-
-    try {
-      const response = await fetch('/feeds/user-feed.json');
-      const feed = await response.json();
-
-      const items = feed.categories.flatMap(c => c.items);
-      const item = items.find(item => item?.props?.rom?.includes(rawRomName));
-      const index = items.findIndex(i => i === item);
-
-      if (!item || index === -1) {
-        console.error(`❌ Could not find ${rawRomName} in user-feed.json`);
-        return;
-      }
-
-      const type = item.type;
-      const props = item.props;
-      const feedUrl = `${window.location.origin}/feeds/user-feed.json`;
-      const encodedFeedUrl = encodeURIComponent(feedUrl);
-
-      launcherIframe.src = `/webrcade/play/app/${type}/index.html?props=${btoa(JSON.stringify(props))}`;
-      
-      console.log("🎮 Launching WebRCade launcher:");
-      console.log("➡️  type:", type);
-      console.log("➡️  props:", props);
-      console.log("➡️  feed URL:", feedUrl);
-      console.log("➡️  index:", index);
-      console.log("➡️  launch frame url:", launcherIframe.src);
-
-	  launcherIframe.onload = () => {
-	    console.log("✅ Emulator launcher iframe loaded");
-	    pollForActiveEmulatorFrame(launcherIframe, rawRomName, waitForVfsAndStartAutoSave);
-	  };
-
-    } catch (err) {
-      console.error("❌ Failed to load feed or locate ROM:", err);
-    }
-  });
-  
-  async function uploadCurrentSaveBlob(romName) {
-    const manager = window?.wrc?.getSaveManager?.();
-
-    if (!manager || typeof window.wrc.getSaveBlob !== "function") {
-      console.warn("❌ SaveManager not ready — can't get save blob.");
-      return;
-    }
-
-    try {
-      const blob = await getSaveBlobFromEmulator("manual-button");
-      if (blob) {
-        console.log("📦 Save blob ready, uploading...");
-        await autoUploadSave(romName, blob);
-        console.log("✅ Save uploaded successfully.");
-      } else {
-        console.warn("⚠️ No save blob found.");
-      }
-    } catch (err) {
-      console.error("❌ Failed to upload save blob:", err);
-    }
-  }
-
-  // ✅ Manual save button
   overlaySaveBtn.addEventListener("click", async () => {
     try {
       console.log("💾 Manual save triggered...");
-      const blob = await getSaveBlobFromEmulator("manual-button-listener"); // ✅ uses unified flush and fallback
+      const blob = await getSaveBlobFromEmulator("manual-button-listener");
       if (blob instanceof Blob) {
         console.log("📦 Save blob ready, uploading...");
-        await autoUploadSave(rawRomName, blob);
+        const rom = romNameText.textContent;
+        await autoUploadSave(rom, blob);
         console.log("✅ Manual save uploaded successfully.");
       } else {
         console.warn("⚠️ No blob found after flush.");
@@ -106,3 +50,47 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 });
+
+function encodeAppProps(props) {
+  // Match the emulator's AppProps.encode()
+  return btoa(encodeURIComponent(JSON.stringify(props)));
+}
+
+async function launchGame(item) {
+  const romPath = item?.props?.rom;
+  const type = item?.type;
+  if (!romPath || !type) {
+    console.error("❌ Invalid ROM item:", item);
+    return;
+  }
+
+  const romName = romPath.split('/').pop();
+  romNameText.textContent = romName;
+
+  setupUploadForm(romName);
+  saveControls.style.display = "block";
+  overlay.style.display = "flex";
+
+  const props = {
+    title: item.title,
+    type: item.type,
+    props: {
+      rom: item.props.rom,
+      save: item.props.save,
+      user: item.props.user
+    }
+  };
+
+  const encodedProps = encodeAppProps(props);
+  const launchUrl = `/rom-reader/webrcade/play/app/${type}/index.html?props=${encodedProps}`;
+
+  launcherIframe.src = launchUrl;
+
+  launcherIframe.onload = () => {
+    console.log("✅ Emulator iframe loaded");
+    pollForActiveEmulatorFrame(launcherIframe, romName, item.type, (romName) => {
+      console.log("🧪 ROM patching complete — starting autosave watch.");
+      waitForVfsAndStartAutoSave(romName);
+    });
+  };
+}

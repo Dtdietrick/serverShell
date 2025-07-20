@@ -15,16 +15,13 @@
   <p><button onclick="window.location.href='/'">⬅️ Back to Home</button></p>
 
   <!-- ROM Selection screen -->
-  <div id="rom-selector" style="display:none">
-    <h2>🎮 Select a Game</h2>
-    <ul>
-      <li><a href="?rom=Pokemon-Red.gb">Play Pokémon Red</a></li>
-      <li><a href="?rom=Pokemon-Emerald.gba">Play Pokémon Emerald</a></li>
-    </ul>
-  </div>
+   <div id="rom-selector" style="display:none">
+     <h2>🎮 Select a Game</h2>
+     <ul id="rom-list"></ul>
+   </div>
 
   <!-- Save Manager -->
-  <div id="save-controls" style="display:none">
+  <div id="save-controls" style="display:none"> 
     <p>Save file: <span id="save-rom-name"></span></p>
     <form id="upload-save-form" enctype="multipart/form-data" method="post">
       <input type="file" name="file" required>
@@ -39,14 +36,9 @@
     <div id="emulator-container">
       <button id="close-emulator">✖</button>
       <iframe id="emulator-frame" allowfullscreen></iframe>
-
-      <!-- ✅ Save button inside overlay -->
       <button id="overlay-save-btn">💾 Save Now</button>
     </div>
   </div>
-
-  <!-- Launch Button -->
-  <button id="emulator-button" style="display:none">▶️ Launch Emulator</button>
 
   <!-- Modular JS -->
   <script type="module" src="js/init.js"></script>

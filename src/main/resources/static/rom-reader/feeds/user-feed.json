@@ -1,0 +1,21 @@
+{
+  "title": "Game Boy Advance Feed",
+  "longTitle": "Nintendo Game Boy Advance Example Feed",
+  "categories": [
+    {
+      "title": "Game Boy Advance Games",
+      "longTitle": "Nintendo Game Boy Advance Games",
+      "items": [
+        {
+          "title": "Pokemon Emerald",
+          "type": "gba",
+          "props": {
+            "rom": "/rom-reader/roms/Pokemon-Emerald.gba",
+			"save": "/saves/Pokemon-Emerald.sav",
+            "user": "dylbeasto"
+          }
+        }
+      ]
+    }
+  ]
+}

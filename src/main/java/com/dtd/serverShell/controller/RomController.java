@@ -31,9 +31,9 @@ public class RomController {
     }
 
     /** 🎮 Serve ROMs from static resources (used by feed-based launcher) */
-    @GetMapping("/roms/{romName:.+}")
+    @GetMapping("/rom-reader/roms/{romName:.+}")
     public ResponseEntity<Resource> serveRom(@PathVariable String romName) throws IOException {
-        String resourcePath = "static/roms/" + romName;
+        String resourcePath = "static/rom-reader/roms/" + romName;
         ClassPathResource resource = new ClassPathResource(resourcePath);
 
         logger.info("Requested ROM: {}", resourcePath);

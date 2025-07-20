@@ -3,10 +3,21 @@ let emulator = null;
 
 // 📌 Shared helper to get to the deepest emulator window (/gba)
 export function resolveEmulatorWindow(launcherIframe) {
-  const launcherWin = launcherIframe?.contentWindow; // /webrcade/play/
-  const emulatorIframe = launcherWin?.document?.getElementById("webrcade-app-iframe"); // /webrcade/play/gba
-  const emulatorWin = emulatorIframe?.contentWindow;
-  return emulatorWin || null;
+  const win = launcherIframe?.contentWindow;
+
+  if (!win) {
+    console.warn("⚠️ Could not access iframe window.");
+    return null;
+  }
+
+  console.log("🧪 Resolved emulator iframe window.href:", win.location?.href);
+  console.log("🧪 Resolved window.feedItem:", win.feedItem);
+  // Assert flat mode
+  if (!win?.app?.emulator) {
+    console.warn("⚠️ Expected flat mode, but emulator not found in iframe window.");
+  }
+
+  return win;
 }
 
 // Returns: true if ready, false otherwise
@@ -90,22 +101,18 @@ export async function getSaveBlobFromEmulator(label = "unspecified") {
 
     if (window?.wrc?.flushSaveData) {
       console.log(`[${label}] 💾 Flushing VFS to IndexedDB...`);
-      await window.wrc.flushSaveData();
+      await window.wrc.flushSaveData().catch(e => {
+        console.warn(`[${label}] 🚨 flushSaveData error:`, e);
+      });
       await new Promise(res => setTimeout(res, 200));
     }
 
-    // Instead of relying on saveManager.getId(), manually construct the ID
-    const title = emulator.getTitle?.();
-    const type = emulator.getType?.();
-    const hash = window?.wrc?.md5?.(title); // OR use your own md5(title) if exposed
-
-    if (!title || !type || !hash) {
-      console.warn(`[${label}] ❌ Failed to derive ID (missing title, type, or hash)`);
+    const id = emulator?.saveStatePath;
+    if (!id) {
+      console.warn(`[${label}] ❌ emulator.saveStatePath not available — fallback to IndexedDB`);
       return await getSaveBlobFromIndexedDb(label);
     }
-
-    const id = `/wrc/${type}/${hash}/sav`;
-    console.log(`[${label}] 🔐 Derived Save ID:`, id);
+    console.log(`[${label}] 🔐 Derived - patched - Save ID:`, id);
 
     const files = await saveManager.loadLocal(id);
     console.log(`[${label}] 🧪 Files returned from loadLocal:`, files);
@@ -125,7 +132,7 @@ export async function getSaveBlobFromEmulator(label = "unspecified") {
   }
 }
 
-export function patchEmulatorWRC(launcherIframe, romName, onReadyCallback) {
+export function patchEmulatorWRC(launcherIframe, romName, typeHint, onReadyCallback) {
   let patchAttempts = 0;
 
   const patchInterval = setInterval(() => {
@@ -136,24 +143,34 @@ export function patchEmulatorWRC(launcherIframe, romName, onReadyCallback) {
     const emulatorRef = emulatorWin?.app?.emulator;
     const managerRef = emulatorRef?.saveManager;
 
-    console.log("🔎 Checking nested iframe internals...");
-    console.log("📦 nested win.app.emulator.saveManager:", managerRef);
-
     if (emulatorRef && managerRef) {
       try {
         const title = emulatorRef.getTitle?.();
-        const type = emulatorRef?.props?.type || "gba"; // fallback safe
         const romMd5 = emulatorRef?.romMd5 || null;
+        const type = emulatorRef?.getType?.() || emulatorRef?.props?.type;
 
         if (!title || !romMd5) {
           console.warn("⏳ Emulator metadata incomplete, waiting...");
           return;
         }
-
+        if (!type) {
+          console.error("❌ Emulator type not found — aborting patch.");
+          clearInterval(patchInterval);
+          return;
+        }
+        console.log("🧪 feedProps raw from emulatorWin.feedItem?.props:", emulatorWin.feedItem?.props);
+        const feedProps = emulatorWin.feedItem?.props || {};
+        const user = feedProps.user || "unknown";
+        emulatorRef.saveStatePrefix = `/wrc/${user}/${romMd5}/`;
+        emulatorRef.saveStatePath = `${emulatorRef.saveStatePrefix}sav`;
+        const savePath = feedProps.save || `/saves/${romName}.sav`;
+        
         console.log("🧩 Patch Info — Save Title:", title);
         console.log("🧩 Patch Info — Save Type:", type);
         console.log("🧩 Patch Info — ROM MD5 Hash:", romMd5);
-
+        console.log("🧩 Patch Info — Username:", user);
+        console.log("🧩 Patch Info — Save Path:", savePath);
+        
         // Set globals for external access
         emulator = emulatorRef;
         saveManager = managerRef;
@@ -170,14 +187,24 @@ export function patchEmulatorWRC(launcherIframe, romName, onReadyCallback) {
           FS,
           title,
           type,
-          romMd5
+          romMd5,
+          user,
+          savePath
         };
 
         window.wrc = emulatorWin.wrc;
 
-        console.log("✅ Emulator is initialized, starting save logic...");
+        console.log("✅ Emulator is initialized — injecting save tools...");
         clearInterval(patchInterval);
-        onReadyCallback(romName);
+
+        // Call onReadyCallback (was waitForVfsAndStartAutoSave)
+        if (typeof onReadyCallback === "function") {
+          try {
+            onReadyCallback(romName);
+          } catch (err) {
+            console.error("❌ Error running post-patch callback:", err);
+          }
+        }
       } catch (e) {
         console.warn("⚠️ Error injecting wrc:", e);
         clearInterval(patchInterval);
@@ -190,8 +217,10 @@ export function patchEmulatorWRC(launcherIframe, romName, onReadyCallback) {
     }
   }, 1000);
 }
+
+
 // === WATCHDOG for PLAY-button launched emulator ===
-export function pollForActiveEmulatorFrame(launcherIframe, romName, onReadyCallback, timeoutMs = 60000) {
+export function pollForActiveEmulatorFrame(launcherIframe, romName, typeHint, onReadyCallback, timeoutMs = 60000) {
   let attempts = 0;
   const maxAttempts = timeoutMs / 500;
 
@@ -201,13 +230,11 @@ export function pollForActiveEmulatorFrame(launcherIframe, romName, onReadyCallb
     const maybeEmulator = emulatorWin?.app?.emulator;
     const maybeSaveManager = maybeEmulator?.saveManager;
 
-    console.log("🔎 Checking nested iframe internals...");
-    console.log("📦 nested win.app.emulator.saveManager:", maybeSaveManager);
 
     if (maybeEmulator && maybeSaveManager) {
       console.log("✅ Nested emulator found — patching now...");
       clearInterval(interval);
-      patchEmulatorWRC(launcherIframe, romName, onReadyCallback); // ✅ centralize logic
+      patchEmulatorWRC(launcherIframe, romName, typeHint, onReadyCallback); // ✅ centralize logic
     }
 
     if (attempts >= maxAttempts) {
