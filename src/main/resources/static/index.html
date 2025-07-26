@@ -8,10 +8,16 @@
 <body>
   <h2>The Stash</h2>
   <button onclick="logout()">🚪 Logout</button>
-  <button id="emulator-button">🕹 Emulator</button>
-  <button onclick="window.location.href='/rom-reader/index.html'">🎮 ROM Reader</button>
   <button onclick="window.location.href='/dashboard.html'">📊 Dashboard</button>
   <div id="back-button">⬅️ Back</div>
+  
+  <div id="rom-launcher" style="margin-top: 1rem;">
+    <h3>🎮 Choose a Game</h3>
+    <ul>
+      <li><button onclick="launchEmulator('Pokemon-Red.gb')">🟥 Pokemon Red</button></li>
+      <li><button onclick="launchEmulator('Pokemon-Emerald.gba')">🟢 Pokemon Emerald</button></li>
+    </ul>
+  </div>
   
   <input
     type="text"
@@ -68,6 +74,8 @@
       shufflePlaylist
     } from '/js/playlistManager.js';
 
+    import {launchEmulator} from '/js/emulator.js';
+    
     // Expose to global for inline event handlers
     window.fetchMediaTree     = fetchMediaTree;
     window.fetchAndRenderPath = fetchAndRenderPath;
