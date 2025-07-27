@@ -14,11 +14,26 @@
   <div id="rom-launcher" style="margin-top: 1rem;">
     <h3>🎮 Choose a Game</h3>
     <ul>
-      <li><button onclick="launchEmulator('Pokemon-Red.gb')">🟥 Pokemon Red</button></li>
-      <li><button onclick="launchEmulator('Pokemon-Emerald.gba')">🟢 Pokemon Emerald</button></li>
+      <li><button onclick="launchEmulator('Pokemon-Red.gb',this)">🟥 Pokemon Red</button></li>
+      <li><button onclick="launchEmulator('Pokemon-Emerald.gba',this)">🟢 Pokemon Emerald</button></li>
     </ul>
   </div>
-  
+  <div id="loading-spinner" style="
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.5rem;
+    font-weight: bold;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    z-index: 9999;
+  ">
+    ⏳ Launching emulator...
+  </div>
   <input
     type="text"
     id="media-search"
@@ -84,7 +99,7 @@
     window.playMedia          = playMedia;
     window.stopAllMedia       = stopAllMedia;
     window.applyPlayerSettings= applyPlayerSettings;
-
+    //playlists
     window.loadPlaylist       = loadPlaylist;
     window.nextInPlaylist     = nextInPlaylist;
     window.prevInPlaylist     = prevInPlaylist;
@@ -93,6 +108,8 @@
 
     // Wire up playlist → player interaction
     setPlayMediaCallback(playMedia);
+    //emulator
+    window.launchEmulator = launchEmulator;
     initPlaylist();
 
     // Kick off initial load

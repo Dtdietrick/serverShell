@@ -33,12 +33,9 @@ public class SecurityConfig {
             .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
             .authorizeHttpRequests(auth -> auth
             	    .requestMatchers(
-            	        "/webrcade/**",
-            	        "/feeds/**",
-            	        "/feeds/user-feed.json",
+            	    	"/emulator/**", 
             	        "/roms/**",
             	        "/saves/**",       
-            	        "/rom-reader/**",
             	        "/login", "/logout",
             	        "/css/**", "/js/**", "/style.css", "/epubReader.html"
             	    ).permitAll()

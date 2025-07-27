@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.nio.file.*;
 import java.security.Principal;
 import java.util.HashMap;
@@ -43,14 +44,7 @@ public class EmulatorController {
             }
 
             String username = principal.getName();
-
-            // 🔽 INSERT THIS
             initializeUserRetroarchIfMissing(username);
-
-            String displayEnv = System.getenv("DISPLAY");
-            if (displayEnv == null) {
-                return ResponseEntity.status(500).body("DISPLAY environment variable not set.");
-            }
 
             Path configPath = Paths.get(romSaveDir, "users", username, "config");
             Path savesPath = Paths.get(romSaveDir, "users", username, "saves");
@@ -58,21 +52,24 @@ public class EmulatorController {
             Files.createDirectories(configPath);
             Files.createDirectories(savesPath);
 
-            ProcessBuilder pb = new ProcessBuilder(
-                "docker", "run", "--rm", "-it",
-                "-e", "DISPLAY=" + displayEnv,
-                "-v", "/tmp/.X11-unix:/tmp/.X11-unix",
-                "-v", configPath.toAbsolutePath() + ":/config",
-                "-v", savesPath.toAbsolutePath() + ":/saves",
-                "retroarch-linux",
-                "-L", "cores/mgba_libretro.so",
-                "roms/" + rom
-            );
 
+            int hostPort = findFreePort();
+            List<String> cmd = List.of(
+                    "docker", "run", "--rm", "-it",
+                    "-v", configPath.toAbsolutePath() + ":/config",
+                    "-v", savesPath.toAbsolutePath() + ":/saves",
+                    "-p", hostPort + ":52300",
+                    "retroarch-linux",
+                    rom
+                );
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.inheritIO();
+            System.out.println("Launching emulator: " + String.join(" ", cmd));
             pb.start();
 
-            return ResponseEntity.ok("Launching emulator for ROM: " + rom);
+            String vncUrl = "http://localhost:" + hostPort + "/vnc.html?autoconnect=true&resize=scale";
+            return ResponseEntity.ok(vncUrl);
         } catch (IOException e) {
             logger.error("❌ Emulator launch failed", e);
             return ResponseEntity.status(500).body("Failed to launch emulator: " + e.getMessage());
@@ -94,7 +91,7 @@ public class EmulatorController {
 
         logger.info("💾 Uploaded save for user {}: {}", username, savePath);
 
-        return ResponseEntity.ok("✅ Save uploaded");
+        return ResponseEntity.ok(" Save uploaded");
     }
 
     @GetMapping("/saves/{romFileName:.+}")
@@ -110,7 +107,7 @@ public class EmulatorController {
             Path fallbackPath = Paths.get(romSaveDir, "default", "saves", romFileName);
 
             if (Files.exists(fallbackPath)) {
-                logger.info("✅ Serving default save: {}", fallbackPath);
+                logger.info(" Serving default save: {}", fallbackPath);
                 return ResponseEntity.ok()
                         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + romFileName + "\"")
                         .contentType(MediaType.APPLICATION_OCTET_STREAM)
@@ -126,7 +123,12 @@ public class EmulatorController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(new org.springframework.core.io.PathResource(savePath));
     }
-    
+    public int findFreePort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            socket.setReuseAddress(true);
+            return socket.getLocalPort();
+        }
+    }
     private void initializeUserRetroarchIfMissing(String username) throws IOException {
         Path userRoot = Paths.get(romSaveDir, "users", username);
         Path configPath = userRoot.resolve("config");
@@ -171,7 +173,7 @@ public class EmulatorController {
                     logger.error("❌ Failed to copy default save file '{}'", source, e);
                 }
             });
-            logger.info("✅ Default config/saves initialized for user '{}'", username);
+            logger.info(" Default config/saves initialized for user '{}'", username);
         }
     }
 }

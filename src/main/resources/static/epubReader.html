@@ -147,7 +147,7 @@
           throw new Error(await response.text());
         }
 
-        statusText.textContent = "✅ Save uploaded!";
+        statusText.textContent = " Save uploaded!";
         statusText.style.color = "lightgreen";
       } catch (err) {
         statusText.textContent = "❌ Upload failed: " + err.message;
@@ -165,7 +165,7 @@
       iframe.src = "about:blank";
     });
 
-    iframe.onload  = () => console.log("✅ Emulator iframe loaded");
+    iframe.onload  = () => console.log(" Emulator iframe loaded");
     iframe.onerror = () => console.error("❌ Emulator iframe failed to load");
 
     loadFeed();
