@@ -1,5 +1,6 @@
 package com.dtd.serverShell.controller;
 
+import com.dtd.serverShell.config.RomRegistry;
 import com.dtd.serverShell.model.AppUser;
 import com.dtd.serverShell.repository.AppUserRepository;
 import org.slf4j.Logger;
@@ -38,8 +39,7 @@ public class EmulatorController {
         if (principal == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
         try {
-            List<String> allowedRoms = List.of("Pokemon-Emerald.gba", "Pokemon-Red.gb");
-            if (!allowedRoms.contains(rom)) {
+            if (!RomRegistry.isAllowed(rom)) {
                 return ResponseEntity.badRequest().body("Invalid ROM requested.");
             }
 
@@ -47,17 +47,16 @@ public class EmulatorController {
             initializeUserRetroarchIfMissing(username);
 
             Path configPath = Paths.get(romSaveDir, "users", username, "config");
-            Path savesPath = Paths.get(romSaveDir, "users", username, "saves");
+            Path savesPath = Paths.get(romSaveDir, "users", username, "saves"); 
 
             Files.createDirectories(configPath);
             Files.createDirectories(savesPath);
 
-
             int hostPort = findFreePort();
             List<String> cmd = List.of(
                     "docker", "run", "--rm", "-it",
-                    "-v", configPath.toAbsolutePath() + ":/config",
-                    "-v", savesPath.toAbsolutePath() + ":/saves",
+                    "-v", configPath.toAbsolutePath() + ":/config", //mount /config/
+                    "-v", savesPath.toAbsolutePath() + ":/saves", // mount /saves/
                     "-p", hostPort + ":52300",
                     "retroarch-linux",
                     rom
@@ -75,8 +74,7 @@ public class EmulatorController {
             return ResponseEntity.status(500).body("Failed to launch emulator: " + e.getMessage());
         }
     }
-    /** 💾 Upload save file for a given ROM (stored as username-ROM.sav) */
-    @PostMapping("/saves/{romFileName:.+}")
+    @PostMapping("/saves/")
     public ResponseEntity<?> uploadSave(@PathVariable String romFileName,
                                         @RequestParam("file") MultipartFile file,
                                         Principal principal) throws IOException {
@@ -84,14 +82,19 @@ public class EmulatorController {
 
         String username = principal.getName();
         Path userSaveDir = Paths.get(romSaveDir, "users", username, "saves");
-        Files.createDirectories(userSaveDir);
+      
+        //Sanitize
+        Path savePath = userSaveDir.resolve(romFileName).normalize();
+     
+        if (!savePath.startsWith(userSaveDir)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Invalid save path");
+        }
 
-        Path savePath = userSaveDir.resolve(romFileName);
+        Files.createDirectories(savePath.getParent());
         Files.copy(file.getInputStream(), savePath, StandardCopyOption.REPLACE_EXISTING);
 
         logger.info("💾 Uploaded save for user {}: {}", username, savePath);
-
-        return ResponseEntity.ok(" Save uploaded");
+        return ResponseEntity.ok("Save uploaded");
     }
 
     @GetMapping("/saves/{romFileName:.+}")
@@ -100,12 +103,19 @@ public class EmulatorController {
         if (principal == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
         String username = principal.getName();
-        Path savePath = Paths.get(romSaveDir, "users", username, "saves", romFileName);
+        Path userSaveDir = Paths.get(romSaveDir, "users", username, "saves");
+      
+        //Sanitize
+        Path savePath = userSaveDir.resolve(romFileName).normalize();
+
+        if (!savePath.startsWith(userSaveDir)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
 
         if (!Files.exists(savePath)) {
             logger.warn("🔍 Save not found for user {}, checking default", username);
-            Path fallbackPath = Paths.get(romSaveDir, "default", "saves", romFileName);
 
+            Path fallbackPath = Paths.get(romSaveDir, "default", "saves", romFileName).normalize();
             if (Files.exists(fallbackPath)) {
                 logger.info(" Serving default save: {}", fallbackPath);
                 return ResponseEntity.ok()
