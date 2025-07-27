@@ -1,16 +1,18 @@
-// virtualExplorer.js
+// File:virtualExplorer.js
+
+//mediaState logic for variables
+import {
+  getCurrentPath,
+  setLastClickedGroupLabel,
+  groupFoldersByLetter,
+  sortItems
+} from '/js/mediaState.js';
 
 // Render A-Z group folders and files with optional pinned 'playlists'
 export function renderGroupedAZView(folders, files, prefix, searchQuery) {
-  const letterGroups = {};
-
-  // Helper: get first letter uppercase or '#'
-  function getLetter(name) {
-    const c = name[0];
-    return /^[A-Z0-9]$/i.test(c) ? c.toUpperCase() : "#";
-  }
-
   const ul = document.createElement("ul");
+  const currentPath = getCurrentPath();
+  console.log("Virtual render for current path:", getCurrentPath());
 
   // Add pinned 'playlists' folder manually first
   if (currentPath === "Music" || currentPath.startsWith("Music/")) {
@@ -21,32 +23,16 @@ export function renderGroupedAZView(folders, files, prefix, searchQuery) {
       li.classList.add("folder", "playlist-folder-icon");
       li.textContent = folder;
       li.onclick = () => {
-        lastClickedGroupLabel = folder;
+        setLastClickedGroupLabel(folder);
         renderFolder(prefix + folder);
       };
       ul.appendChild(li);
     }
   }
 
-  // Group folders by letter
-  folders
-    .filter((f) => !searchQuery || f.toLowerCase().includes(searchQuery))
-    .forEach((folder) => {
-      const letter = getLetter(folder);
-      if (!letterGroups[letter]) letterGroups[letter] = new Set();
-      letterGroups[letter].add(folder + "/");
-    });
-
-  // Group files by letter
-  files
-    .filter((f) => !searchQuery || f.toLowerCase().includes(searchQuery))
-    .forEach((file) => {
-      const letter = getLetter(file);
-      if (!letterGroups[letter]) letterGroups[letter] = new Set();
-      letterGroups[letter].add(file);
-    });
-
-  // Now render A-Z groups
+  //render A-Z virtual groups
+  const letterGroups = groupFoldersByLetter(folders, files, searchQuery);
+  
   Object.keys(letterGroups)
     .sort()
     .forEach((letter) => {
@@ -55,7 +41,7 @@ export function renderGroupedAZView(folders, files, prefix, searchQuery) {
       li.textContent = letter;
 
       li.onclick = () => {
-        lastClickedGroupLabel = letter;
+        setLastClickedGroupLabel(letter);
         renderVirtualGroup(letter, Array.from(letterGroups[letter]).sort());
         backButton.style.display = "block";
       };
@@ -66,24 +52,21 @@ export function renderGroupedAZView(folders, files, prefix, searchQuery) {
   const scrollContainer = document.createElement("div");
   scrollContainer.id = "media-scroll";
   scrollContainer.appendChild(ul);
-
   mediaTree.appendChild(scrollContainer);
 }
 
 export function renderVirtualGroup(letter, items) {
   mediaTree.innerHTML = `<h4>Group: ${letter}</h4>`;
-  lastClickedGroupLabel = letter;
+  setLastClickedGroupLabel(letter);
 
   const ul = document.createElement("ul");
-  const prefix = currentPath ? currentPath + "/" : "";
+  const prefix = getCurrentPath() ? getCurrentPath() + "/" : "";
 
   // Sort alphabetically
-  const sortedItems = [...items]
-    .filter(item => item && item.trim() !== "" && item !== "/") // ✨ Filter out invalid entries
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  const sortedItems = sortItems(items);
     
   // Detect and pin playlists/ only once, only at top-level Music
-  if ((currentPath === "Music" || currentPath.startsWith("Music/")) && sortedItems.includes("playlists/")) {
+  if ((getCurrentPath() === "Music" || getCurrentPath().startsWith("Music/")) && sortedItems.includes("playlists/")) {
     sortedItems.splice(sortedItems.indexOf("playlists/"), 1);
     sortedItems.unshift("playlists/");
   }
@@ -96,7 +79,7 @@ export function renderVirtualGroup(letter, items) {
       li.classList.add("folder");
       li.textContent = folderName;
       li.onclick = () => {
-        lastClickedGroupLabel = folderName;
+        setLastClickedGroupLabel(folderName);
         fetchAndRenderPath(prefix + folderName);
       };
     } else if (item.toLowerCase().endsWith(".m3u")) {

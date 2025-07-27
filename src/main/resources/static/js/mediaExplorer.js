@@ -1,18 +1,25 @@
-// mediaExplorer.js
+// FILE:mediaExplorer.js
+
+//mediaState logic for variables
+import {
+  getCurrentPath,
+  setCurrentPath,
+  getLastClickedGroupLabel,
+  setLastClickedGroupLabel,
+  getFileList,
+  setFileList
+} from '/js/mediaState.js';
+
+//virtual group logic
 import { renderGroupedAZView, renderVirtualGroup } from '/js/virtualExplorer.js';
+
 // DOM references
 const mediaTree = document.getElementById("mediaTree");
 const player = document.getElementById("player");
 const backButton = document.getElementById("back-button");
-
 const playlistPopup = document.getElementById("playlist-popup");
 const popupPlayer = document.getElementById("popup-player");
 const playlistItems = document.getElementById("playlist-items");
-
-// State variables
-let fileList = []; // Holds current folder contents fetched from backend
-let currentPath = ""; // Tracks current folder path
-let lastClickedGroupLabel = null;
 
 /**
  * Fetches folder contents from backend for given path,
@@ -31,7 +38,6 @@ export function fetchAndRenderPath(path) {
     .then((files) => {
       if (!files) return;
 
-      // Check if folder contains exactly one folder and no files
       const prefix = path ? path + "/" : "";
       const folders = new Set();
       const filesInFolder = [];
@@ -49,20 +55,17 @@ export function fetchAndRenderPath(path) {
         }
       });
 
-      // Auto-dive if only one folder and no files
       if (filesInFolder.length === 0 && folders.size === 1) {
         const onlyFolder = Array.from(folders)[0];
         const currentFolderName = path ? path.split("/").pop() : "";
         if (onlyFolder === currentFolderName) {
-          // Auto dive into the nested same-named folder
           fetchAndRenderPath(path + "/" + onlyFolder);
           return;
         }
       }
 
-      // If no auto dive, set fileList and render normally
-      fileList = files;
-      currentPath = path;
+      setFileList(files);
+      setCurrentPath(path);
       renderFolder(path);
     })
     .catch(() => {
@@ -81,7 +84,7 @@ export function fetchMediaTree() {
     .then((files) => {
       console.log("Received files:", files);
       if (!Array.isArray(files)) throw new Error("Invalid file list");
-      fileList = files;
+      setFileList(files);
       renderFolder("");
     })
     .catch((err) => {
@@ -96,46 +99,44 @@ export function fetchMediaTree() {
  * @param {string} path - Current folder path
  */
 export function renderFolder(path) {
-  currentPath = path || ""; // update global currentPath
+  setCurrentPath(path || "");
 
-  updateSearchVisibility(); // hide/show search bar based on path
+  updateSearchVisibility();
 
-  const prefix = currentPath ? currentPath + "/" : "";
+  const prefix = getCurrentPath() ? getCurrentPath() + "/" : "";
   const searchQuery = getSearchQuery();
-
-  // Separate folders and files under currentPath
   const { folders, files } = getFolderAndFileLists(prefix);
 
-  mediaTree.innerHTML = lastClickedGroupLabel ? `<h4>Group: ${lastClickedGroupLabel}</h4>` : "";
+  mediaTree.innerHTML = getLastClickedGroupLabel()
+    ? `<h4>Group: ${getLastClickedGroupLabel()}</h4>`
+    : "";
 
-  // Decide whether to show grouped A-Z view
   const threshold = 10;
-  const topLevelGrouping = ["Movies", "Music", "Books","TV"];
-  const pathRoot = currentPath.split("/")[0];
+  const topLevelGrouping = ["Movies", "Music", "Books", "TV"];
+  const pathRoot = getCurrentPath().split("/")[0];
   const shouldGroup = topLevelGrouping.includes(pathRoot) && (folders.length + files.length > threshold);
 
   if (shouldGroup) {
-    renderGroupedAZView(folders, files, prefix, searchQuery); // Render grouped view
+    renderGroupedAZView(getCurrentPath(), folders, files, prefix, searchQuery);
   } else {
-    renderSimpleListView(folders, files, prefix); // Render normal folders and files
+    renderSimpleListView(folders, files, prefix);
   }
 
-  backButton.style.display = currentPath ? "block" : "none"; // Toggle back button
+  backButton.style.display = getCurrentPath() ? "block" : "none";
 }
 
 // Show/hide the search input based on whether we're in root
 function updateSearchVisibility() {
   const searchInput = document.getElementById("media-search");
   if (searchInput) {
-    if (!currentPath) {
+    if (!getCurrentPath()) {
       searchInput.style.display = "none";
-      searchInput.value = ""; // Clear search when returning to root
+      searchInput.value = "";
     } else {
       searchInput.style.display = "block";
     }
   }
 }
-
 
 // Render normal folders and files
 function renderSimpleListView(folders, files, prefix) {
@@ -146,7 +147,7 @@ function renderSimpleListView(folders, files, prefix) {
     li.classList.add("folder");
     li.textContent = folder;
     li.onclick = () => {
-      lastClickedGroupLabel = folder; // track real folder name
+      setLastClickedGroupLabel(folder);
       renderFolder(prefix + folder);
     };
     ul.appendChild(li);
@@ -156,7 +157,7 @@ function renderSimpleListView(folders, files, prefix) {
     const li = document.createElement("li");
 
     if (file.toLowerCase().endsWith(".m3u")) {
-	  console.log("Loading playlist:", prefix + file.slice(0, -4));
+      console.log("Loading playlist:", prefix + file.slice(0, -4));
       li.classList.add("playlist-file");
       li.textContent = file;
       li.onclick = () => loadPlaylist(prefix + file.slice(0, -4));
@@ -187,8 +188,9 @@ function getFolderAndFileLists(prefix) {
   const foldersSet = new Set();
   const filesList = [];
 
+  const allFiles = getFileList();
   // Filter fileList to entries inside currentPath
-  fileList.forEach((item) => {
+  allFiles.forEach((item) => {
     if (!item.startsWith(prefix)) return;
 
     const rest = item.slice(prefix.length);
@@ -209,8 +211,9 @@ function getFolderAndFileLists(prefix) {
 
   let folders = Array.from(foldersSet);
 
+  const path = getCurrentPath();
   // Special handling to pin 'playlists' to top if in Music
-  if (currentPath === "Music" || currentPath.startsWith("Music/")) {
+  if (path === "Music" || path.startsWith("Music/")) {
     const playlistsIndex = folders.findIndex((f) => f.toLowerCase() === "playlists");
     if (playlistsIndex > -1) {
       const playlistsFolder = folders.splice(playlistsIndex, 1)[0];
@@ -236,7 +239,7 @@ function getSearchQuery() {
 const searchInput = document.getElementById("media-search");
 if (searchInput) {
   searchInput.addEventListener("input", () => {
-    renderFolder(currentPath);
+    renderFolder(getCurrentPath());
   });
 }
 
@@ -315,14 +318,16 @@ export function applyPlayerSettings(playerElement) {
 
 // Back button navigates up one folder and fetches new data
 backButton.onclick = () => {
+  const currentPath = getCurrentPath();
   if (!currentPath) return;
 
   const isInMusic = currentPath === "Music" || currentPath.startsWith("Music/");
-  const isVirtualGroup = /^[A-Z0-9#]$/.test(lastClickedGroupLabel); // Virtual group is single A-Z, 0-9, or #
+  const group = getLastClickedGroupLabel();
+  const isVirtualGroup = /^[A-Z0-9#]$/.test(group); // Virtual group is single A-Z, 0-9, or #
 
   if (isInMusic && isVirtualGroup) {
     // Go back to virtual A–Z view
-    lastClickedGroupLabel = "";
+    setLastClickedGroupLabel("");
     renderFolder(currentPath); // Re-render group view (A-Z folders + pinned playlists)
     return;
   }
@@ -330,15 +335,13 @@ backButton.onclick = () => {
   // Normal folder navigation
   const parts = currentPath.split("/");
   parts.pop();
-  currentPath = parts.join("/");
-
-  if (!currentPath) {
-    lastClickedGroupLabel = "";
+  const parent = parts.join("/");
+  
+  if (!parent) {
+    setLastClickedGroupLabel("");
   } else {
-    lastClickedGroupLabel = currentPath.split("/").pop();
+     setLastClickedGroupLabel(parent.split("/").pop());
   }
-
+  setCurrentPath(parent);
   fetchAndRenderPath(currentPath);
 };
-// Initial load
-fetchMediaTree();
