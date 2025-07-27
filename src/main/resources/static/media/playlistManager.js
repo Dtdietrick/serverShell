@@ -1,4 +1,4 @@
-// playlistManager.js
+// File:playlistManager.js
 
 // DOM references (assumed to be available globally or passed in)
 const playlistPopup = document.getElementById("playlist-popup");
@@ -41,7 +41,7 @@ export function loadPlaylist(name, reset = true) {
   }
   
   fetch(
-    `/media/playlist?name=${encodeURIComponent(
+    `/media/api/playlist?name=${encodeURIComponent(
       name
     )}&offset=${playlistOffset}&limit=${playlistLimit}`
   )

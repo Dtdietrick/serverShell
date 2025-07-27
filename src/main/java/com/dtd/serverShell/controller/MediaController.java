@@ -1,3 +1,4 @@
+//FILE:MediaController.java
 package com.dtd.serverShell.controller;
 
 import java.io.IOException;
@@ -30,7 +31,7 @@ import com.dtd.serverShell.services.UserProfileService;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
-@RequestMapping("/media")
+@RequestMapping("/media/api")
 public class MediaController {
 	
 	
@@ -69,53 +70,43 @@ public class MediaController {
         return ResponseEntity.ok(mediaService.loadPlaylist(name, offset, limit));
     }
 
-    @GetMapping("/**")
+    @GetMapping("/stream/**")
     public ResponseEntity<Resource> getMedia(
             HttpServletRequest request,
             @RequestHeader(value = "Range", required = false) String rangeHeader,
             @RequestParam(value = "fromPlaylist", required = false) Boolean fromPlaylist) throws IOException {
 
-        // Log the requested file path
-    	Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    	String username = auth != null ? auth.getName() : "anonymous";
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth != null ? auth.getName() : "anonymous";
 
-    	String ip = request.getHeader("X-Forwarded-For");
-    	if (ip == null) ip = request.getRemoteAddr();
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null) ip = request.getRemoteAddr();
 
-    	String userAgent = request.getHeader("User-Agent");
-    	String requestedPath = request.getRequestURI(); // e.g., /media/movies/12_monkeys.mp4
+        String userAgent = request.getHeader("User-Agent");
+        String requestedPath = request.getRequestURI();
 
-    	log.info("MEDIA ACCESS: user={}, path={}, ip={}, agent={}", username, requestedPath, ip, userAgent);
-    	auditLog.info("MEDIA ACCESS: user={}, path={}, ip={}, agent={}", username, requestedPath, ip, userAgent);
-        // Matches any GET request starting with /media/ to serve media files
-        String pattern = "/media/**";
+        log.info("MEDIA ACCESS: user={}, path={}, ip={}, agent={}", username, requestedPath, ip, userAgent);
+        auditLog.info("MEDIA ACCESS: user={}, path={}, ip={}, agent={}", username, requestedPath, ip, userAgent);
 
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             log.warn("Unauthorized media access attempt for path: {}", requestedPath);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        // Get the full request URI
-        String fullPath = request.getRequestURI();
 
-        // Extract the part of the URI after /media/ using AntPathMatcher
-        String encodedPath = pathMatcher.extractPathWithinPattern(pattern, fullPath);
-
-        // URL-decode the extracted path to handle encoded characters
+        // Extract media path after /media/api/stream/
+        String pattern = "/media/api/stream/**";
+        String encodedPath = pathMatcher.extractPathWithinPattern(pattern, requestedPath);
         String path = URLDecoder.decode(encodedPath, StandardCharsets.UTF_8);
 
-        // Assume mediaRoot is the base directory on disk where media files reside
         Path mediaRoot = Paths.get(mediaDir).normalize();
         Path requestedFile = mediaRoot.resolve(path).normalize();
-        
+
         if (!requestedFile.startsWith(mediaRoot) || !Files.exists(requestedFile)) {
             log.warn("Invalid or missing media file request: {}", requestedFile);
             return ResponseEntity.notFound().build();
         }
-        
-        // Record the view in the user profile
+
         userProfileService.recordView(username, path);
-        
-        // Delegate to MediaService to serve the media file with support for range requests and playlist context
         return mediaService.getMedia(path, rangeHeader, fromPlaylist);
     }
 }

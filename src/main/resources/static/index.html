@@ -9,42 +9,42 @@
   <h2>The Stash</h2>
   <button onclick="logout()">🚪 Logout</button>
   <button onclick="window.location.href='/dashboard.html'">📊 Dashboard</button>
-  <div id="back-button">⬅️ Back</div>
   
-  <div id="rom-launcher" style="margin-top: 1rem;">
-    <h3>🎮 Choose a Game</h3>
-    <ul>
-      <li><button onclick="launchEmulator('Pokemon-Red.gb',this)">🟥 Pokemon Red</button></li>
-      <li><button onclick="launchEmulator('Pokemon-Emerald.gba',this)">🟢 Pokemon Emerald</button></li>
-    </ul>
+  
+  <div id="pinned-launchers">
+    <div id="rom-launcher">
+      <h3>🎮 Choose a Game</h3>
+      <ul>
+        <li><button onclick="launchEmulator('Pokemon-Red.gb',this)">🟥 Pokemon Red</button></li>
+        <li><button onclick="launchEmulator('Pokemon-Emerald.gba',this)">🟢 Pokemon Emerald</button></li>
+      </ul>
+    </div>
+    <div id="media-launcher">
+      <h3>📁 Browse Media</h3>
+      <ul>
+        <li><button onclick="renderFolder('Books')" class="media-btn">📚 Books</button></li>
+        <li><button onclick="renderFolder('TV')" class="media-btn">📺 TV</button></li>
+        <li><button onclick="renderFolder('Movies')" class="media-btn">🎬 Movies</button></li>
+        <li><button onclick="renderFolder('Music')" class="media-btn">🎵 Music</button></li>
+      </ul>
+    </div>
+    <input
+      type="text"
+      id="media-search"
+      placeholder="Search..."
+      style="display: none; margin: 0.5rem 1rem; padding: 0.3rem; width: 80%;"
+    />
+    <div id="back-button">⬅️ Back</div>
   </div>
-  <div id="loading-spinner" style="
-    display: none;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 1.5rem;
-    font-weight: bold;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    padding: 1rem 2rem;
-    border-radius: 8px;
-    z-index: 9999;
-  ">
-    ⏳ Launching emulator...
-  </div>
-  <input
-    type="text"
-    id="media-search"
-    placeholder="Search..."
-    style="display: none; margin: 0.5rem 1rem; padding: 0.3rem; width: 80%;"
-  />
+  
 
   <div id="main-layout">
-    <div id="mediaTree">Loading...</div>
+    <div id="mediaTree">Select A Media Type First...</div>
     <div id="player"></div>
   </div>
+  
+  <div id="loading-spinner">⏳ Loading ...</div>
+  
 
   <!-- Playlist popup UI -->
   <div id="playlist-popup">
@@ -64,21 +64,23 @@
   <!-- Main logic pulled in as ES modules -->
   <script type="module">
     // Auth (logout)
-    import { logout } from '/js/auth.js';
+    import { logout } from '/ui/auth.js';
     window.logout = logout;
 
     // Core explorer logic
     import {
-      fetchMediaTree,
-      fetchAndRenderPath,
-      renderFolder,
       playMedia,
       stopAllMedia,
       applyPlayerSettings
-    } from '/js/mediaExplorer.js';
+    } from '/explorer/mediaExplorer.js';
 
     //virtual grouping
-    import { renderVirtualGroup } from '/js/virtualExplorer.js';
+    import { 
+        renderFolder,
+        renderVirtualGroup 
+    } from '/explorer/virtualExplorer.js';
+    //backBtn
+    import { updateBackButtonVisibility } from "/ui/backButton.js";
     // Playlist logic
     import {
       initPlaylist,
@@ -88,34 +90,37 @@
       prevInPlaylist,
       closePlaylist,
       shufflePlaylist
-    } from '/js/playlistManager.js';
+    } from '/media/playlistManager.js';
 
-    import { launchEmulator } from '/js/emulator.js';
-
-
-    // Expose to global for inline event handlers
-    window.fetchMediaTree     = fetchMediaTree;
-    window.fetchAndRenderPath = fetchAndRenderPath;
-    window.renderFolder       = renderFolder;
-    window.renderVirtualGroup = renderVirtualGroup;
-    window.playMedia          = playMedia;
-    window.stopAllMedia       = stopAllMedia;
-    window.applyPlayerSettings= applyPlayerSettings;
-    //playlists
-    window.loadPlaylist       = loadPlaylist;
-    window.nextInPlaylist     = nextInPlaylist;
-    window.prevInPlaylist     = prevInPlaylist;
-    window.closePlaylist      = closePlaylist;
-    window.shufflePlaylist    = shufflePlaylist;
-
+    import { launchEmulator } from '/emulator/emulator.js';
+    import { attachLauncherSpinnerEvents } from "/ui/onClick.js";
+    
+    Object.assign(window, {
+      logout,
+      launchEmulator,
+      //media
+      renderFolder,
+      renderVirtualGroup,
+      playMedia,
+      stopAllMedia,
+      applyPlayerSettings,
+      updateBackButtonVisibility,
+      //playlists
+      loadPlaylist,
+      nextInPlaylist,
+      prevInPlaylist,
+      closePlaylist,
+      shufflePlaylist
+    });
+    
     // Wire up playlist → player interaction
     setPlayMediaCallback(playMedia);
     //emulator
-    window.launchEmulator = launchEmulator;
     initPlaylist();
-
-    // Kick off initial load
-    fetchMediaTree();
+    
+    window.addEventListener("DOMContentLoaded", () => {
+      attachLauncherSpinnerEvents();
+    });
   </script>
   
 </body>

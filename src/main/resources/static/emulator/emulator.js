@@ -1,12 +1,10 @@
+// File:emulator.js
+
 export function launchEmulator(rom, button) {
-  const spinner = document.getElementById("loading-spinner");
   
   if (button.disabled) return; // extra safety against double click
   
   const originalText = button.textContent;
-  button.disabled = true;
-  button.textContent = "Launching... ⏳";
-  spinner.style.display = "block";
   const win = window.open('', '_blank'); 
   
   fetch('/emulator/launch?rom=' + encodeURIComponent(rom), { method: 'POST' })
@@ -20,15 +18,11 @@ export function launchEmulator(rom, button) {
         // Reset UI
         win.location.href = url;
         button.textContent = originalText;
-        button.disabled = false;
-        spinner.style.display = "none"; // Hide spinner
       }, 2500);
     })
     .catch((err) => {
       win.close();
       alert("Emulator error: " + err.message);
       button.textContent = originalText;
-      button.disabled = false;
-      spinner.style.display = "none";
     });
 }
