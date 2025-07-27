@@ -42,7 +42,7 @@ public class MediaService {
         Path mediaRoot = Paths.get(mediaDir).toAbsolutePath().normalize();
         Path resolvedPath = mediaRoot.resolve(filename).normalize();
 
-        // 🚫 Security check to prevent path traversal attacks outside the media directory
+        //  Security check to prevent path traversal attacks outside the media directory
         if (!resolvedPath.startsWith(mediaRoot)) {
             log.error("[MediaService] Invalid file path (path traversal attempt): " + filename);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
@@ -62,7 +62,7 @@ public class MediaService {
         headers.set(HttpHeaders.ACCEPT_RANGES, "bytes"); // Support partial content requests (streaming)
         headers.setContentType(getMediaType(filename));
 
-        // 🎯 Handle HTTP Range header for streaming partial content (e.g., video/audio seeking)
+        // Handle HTTP Range header for streaming partial content (e.g., video/audio seeking)
         if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
             String rangeValue = rangeHeader.substring("bytes=".length());
             String[] rangeParts = rangeValue.split("-", 2);

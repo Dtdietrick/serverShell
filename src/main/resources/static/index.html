@@ -72,12 +72,13 @@
       fetchMediaTree,
       fetchAndRenderPath,
       renderFolder,
-      renderVirtualGroup,
       playMedia,
       stopAllMedia,
       applyPlayerSettings
     } from '/js/mediaExplorer.js';
 
+    //virtual grouping
+    import { renderVirtualGroup } from '/js/virtualExplorer.js';
     // Playlist logic
     import {
       initPlaylist,
@@ -89,8 +90,9 @@
       shufflePlaylist
     } from '/js/playlistManager.js';
 
-    import {launchEmulator} from '/js/emulator.js';
-    
+    import { launchEmulator } from '/js/emulator.js';
+
+
     // Expose to global for inline event handlers
     window.fetchMediaTree     = fetchMediaTree;
     window.fetchAndRenderPath = fetchAndRenderPath;
