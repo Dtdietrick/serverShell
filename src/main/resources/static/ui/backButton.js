@@ -2,7 +2,10 @@
 
 import {
   getCurrentPath,
-  popPreviousPath,
+  setCurrentPath,
+  pushPath,
+  popPath,
+  peekPath,
   getLastClickedGroupLabel,
   setLastClickedGroupLabel,
   isInVirtualGroup,
@@ -10,39 +13,50 @@ import {
   getMediaRoot
 } from "/media/mediaState.js";
 
+import { 
+    getShowBackButton, 
+    setShowBackButton,
+} from "/ui/loading.js";
+
 import { renderFolder } from "/explorer/virtualExplorer.js";
-
-const backButton = document.getElementById("back-button");
-
 // Back button navigates up one folder and fetches new data
-function updateBackButtonVisibility() {
+const backButton = document.querySelector(".back-btn");
+backButton.onclick = () => {
   const current = getCurrentPath();
   const root = getMediaRoot();
-  backButton.style.display = current !== root ? "block" : "none";
-}
 
-backButton.onclick = () => {
-  const currentPath = getCurrentPath();
-  const mediaRoot = getMediaRoot();
-  if (!currentPath) return;
+  if (!current || current === root) return;
 
-  if (!currentPath || currentPath === mediaRoot) {
-    console.log("Already at root, no back action.");
-    return;
-  }
-  
-  const prev = popPreviousPath();
+  const prev = popPath();
   console.log("Back to:", prev);
-  
-  // Reset flags if going back to grouped view
-  if (prev === mediaRoot) {
+
+  if (prev === root) {
     setLastClickedGroupLabel("");
     setInVirtualGroup(false);
   }
 
-
+  setCurrentPath(prev);
   renderFolder(prev);
-  updateBackButtonVisibility();
 };
+//console.log("peekPath:", peekPath());
+//console.log("pathHistory:", getPathHistory());
+export function updateBackButton(path) {
+  const show = getShowBackButton();
+  const root = getMediaRoot();
+  const prev = peekPath();
+  console.log(`before update: ${path}`);
+  const atRoot = path === root;
 
-export { updateBackButtonVisibility };
+  // skip if history is not yet initialized
+  if (!prev) return;
+  
+  // update button UI
+  setShowBackButton(!atRoot);
+
+  // push to path history ONLY if it's a new path
+  if (!atRoot && path !== prev) {
+    pushPath(path);
+  }
+  
+  console.log(`after update: ${path}`);
+};

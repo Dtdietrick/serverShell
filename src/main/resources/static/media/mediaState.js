@@ -11,6 +11,7 @@ let pathHistory = [];
 export function getCurrentPath() { return currentPath; }
 export function setCurrentPath(path) { currentPath = path; }
 
+
 export function getFileList() { return fileList; }
 export function setFileList(file) { fileList = file; }
 
@@ -57,16 +58,29 @@ export function sortItems(items) {
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
-//stack style history track
-export function popPreviousPath() {
-  if (pathHistory.length > 1) {
-    pathHistory.pop(); // remove current
-    currentPath = pathHistory[pathHistory.length - 1]; // peek
-    return currentPath;
-  }
-  return currentPath;
+
+//Path history logic
+export function pushPath(path) {
+  if (!path || path === pathHistory[pathHistory.length - 1]) return;
+  pathHistory.push(path);
 }
-export function resetHistory(path) {
-  currentPath = path;
-  pathHistory = [path];
+
+export function popPath() {
+  if (pathHistory.length > 1) {
+    pathHistory.pop(); // drop current
+    return pathHistory[pathHistory.length - 1]; // previous
+  }
+  return pathHistory[0]; // root fallback
+}
+
+export function getPathHistory() {
+  return [...pathHistory];
+}
+
+export function resetPathHistory(rootPath) {
+  pathHistory = [rootPath]; // reset with just the root
+}
+
+export function peekPath() {
+  return pathHistory[pathHistory.length - 1];
 }

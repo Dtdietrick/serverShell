@@ -11,7 +11,7 @@ import {
 } from '/media/mediaState.js';
 
 // DOM references
-const player = document.getElementById("player");
+const player = document.getElementById("viewer-player");
 const playlistPopup = document.getElementById("playlist-popup");
 const popupPlayer = document.getElementById("popup-player");
 const playlistItems = document.getElementById("playlist-items");

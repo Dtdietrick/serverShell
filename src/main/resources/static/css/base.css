@@ -1,0 +1,11 @@
+/* Basic page styling */
+body {
+  font-family: sans-serif;
+  padding: 2rem;
+}
+
+/* General list reset */
+ul {
+  list-style-type: none;
+  padding-left: 0;
+}

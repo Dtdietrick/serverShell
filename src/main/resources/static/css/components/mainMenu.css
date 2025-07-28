@@ -1,0 +1,42 @@
+/* FILE: /css/components/mainMenu.css */
+
+/* Visual styling for pinned launcher */
+#pinned-launchers {
+  background-color: var(--background-secondary, #f4f4f4);
+  border-bottom: 1px solid #ccc;
+  font-size: 0.9rem;
+}
+
+#pinned-launchers h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+#pinned-launchers ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  gap: 0.5rem;
+}
+
+#pinned-launchers li {
+  margin: 0;
+}
+
+#pinned-launchers button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+#pinned-launchers #media-search {
+  margin-top: 0.5rem;
+}
+
+#pinned-launchers .back-btn {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #007BFF;
+}

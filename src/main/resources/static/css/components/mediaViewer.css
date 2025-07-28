@@ -1,0 +1,27 @@
+/* FILE: mediaViewer.css */
+
+#media-viewer {
+  flex: 1;
+  padding: 1rem;
+  background: #fff;
+  height: 600px; /* match mediaTree height */
+  overflow: hidden; /* 🔥 disables scrolling */
+  box-sizing: border-box;
+  border-left: 1px solid #ccc;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+
+/* Optional: Add an inner div with overflow auto if you ever want manual control */
+.viewer-content {
+  height: 100%;
+  overflow: hidden; /* 🔥 stays static */
+  padding-right: 1rem;
+}
+
+#media-viewer audio,
+#media-viewer video {
+  width: 100%;
+  margin-top: 1rem;
+  max-height: 100%; /* optional: prevent overflow */
+}

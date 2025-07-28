@@ -37,7 +37,7 @@ public class SecurityConfig {
             	        "/roms/**",
             	        "/saves/**",       
             	        "/login", "/logout",
-            	        "/css/**", "/js/**", "/style.css", "/epubReader.html"
+            	        "/css/**", "/js/**","/epubReader.html"
             	    ).permitAll()
             	    .anyRequest().authenticated()
             )

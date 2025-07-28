@@ -1,0 +1,39 @@
+#playlist-popup {
+  position: fixed;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 600px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  padding: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 999;
+  display: none;
+}
+
+#playlist-popup h3 {
+  margin-top: 0;
+}
+
+#playlist-popup .close-btn {
+  float: right;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1.2rem;
+  margin-top: -0.5rem;
+}
+
+#playlist-items {
+  height: 300px;
+  overflow-y: auto;
+  padding-left: 1rem;
+  border: 1px solid #ccc;
+}
+
+#playlist-items li {
+  padding: 0.5rem;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+}

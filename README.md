@@ -1,106 +1,140 @@
-Usage
+# ServerShell
 
-    Navigate folders and playlists via the web UI
+`serverShell` is a modular Spring Boot application that serves as a self-hosted, plugin-based media server. It provides a web-based interface for exploring and playing media files including audio, video, eBooks (EPUB), and emulated games.
 
-    Click on media files to start streaming
+## Overview
 
-    Click on playlists to open a popup player with track scrolling and playback controls
+This application exposes a unified frontend and a set of backend services to stream and interact with locally stored media. Each media type is handled by a plugin-style controller and rendering layer.
 
-    Use the back button to navigate up folders
+Supported media types:
+- Music and video streaming via native browser players
+- Playlist management and playback
+- EPUB reading via in-browser EPUB.js
+- Game Boy and Game Boy Advance emulation via Dockerized RetroArch with mGBA
 
-API Endpoints
+## Features
 
-    GET /media/list - Returns JSON list of all media files with relative paths
+- Responsive file explorer with folder navigation
+- Popup player with playlist queue and controls
+- EPUB reader using client-side EPUB.js
+- On-demand emulator session launch for GBA/GB ROMs
+- Per-user save states for games
+- Modular API endpoints per media type
+- Simple access control via Spring Security
 
-    GET /media/playlist?name={playlistName}&offset={offset}&limit={limit} - Returns paginated playlist entries
+---
 
-    GET /media/{filename} - Streams media file (supports Range requests for partial streaming)
-	
-	
-📚 EPUB Reader Endpoints
+## Usage
 
-    GET /epubs
-    Returns a JSON array of all .epub files found recursively under the Books/ directory (relative to media.dir).
+1. Launch the server and access the UI in your browser at `http://<host>:<port>/`
+2. Use the navigation pane to explore media folders:
+   - Click on a media file to start playback
+   - Click on a playlist file to launch the popup player
+   - Click on a ROM to start an emulator session
+   - Use the back button to navigate up directories
+3. Save game progress via UI or automatic emulator hooks
 
-    GET /epubs/download?file={path}
-    Streams an EPUB file for the client-side EPUB.js reader.
-    Supports HTTP Range headers for partial loading.
+---
 
-        Example: /epubs/download?file=Books/Fiction Books/Orwell, George/1984.epub
+## API Endpoints
 
-    GET /epubReader.html?file={path}
-    Loads the web-based EPUB reader interface for the specified book.
-    Uses EPUB.js for in-browser reading.
+### Media
 
-        Example:
-        http://192.168.1.99:8080/epubReader.html?file=Books%2FFiction%20Books%2FCervantes%2C%20Miguel%20De%2FDon%20Quixote.epub
+- `GET /media/list?path={relativePath}`  
+  Returns a list of folders and files for the given path
 
-	🕹 Game Boy Emulator Integration (WebRcade Patch)
-	This project includes a customized version of the WebRcade GBA emulator, with save-state support integrated into the local file server.
+- `GET /media/{filename}`  
+  Streams the specified file (supports HTTP Range for partial streaming)
 
-	✅ Features:
-	Embedded Game Boy Advance emulator (webrcade-app-vba-m)
+- `GET /media/playlist?name={playlistName}&offset={offset}&limit={limit}`  
+  Returns paginated playlist contents
 
-[Your File Server HTML/UI]
-    |
-    |  📦 Launch button → loads iframe:
-    v
-[WebRCade UI Shell (/webrcade/play/index.html)]
-    |
-    |  📂 Feed-based launch of GBA emulator:
-    v
-[GBA Emulator Core (/webrcade/play/app/gba/)]
-    |
-    |  🧠 Exposes `window.wrc` + handles FS/Module
-    |
-    |  💾 Writes save data into MEMFS → IDBFS
-	
+### EPUB
 
-🧪 Debug Tips:
-Use window.wrc.getSaveBlob().then(console.log) in browser console to verify save exists
+- `GET /epubs`  
+  Lists all EPUB files found recursively under the configured Books directory
 
-Ensure window.FS.syncfs is defined inside the emulator iframe (after flush)
+- `GET /epubs/download?file={relativePath}`  
+  Streams a single EPUB file to the EPUB.js reader (supports HTTP Range)
 
+- `GET /epubReader.html?file={relativePath}`  
+  Launches the browser-based EPUB reading UI
 
-Security Notes
+### Emulator
 
-    The server prevents path traversal attacks by sanitizing requested file paths
+- `POST /emulator/launch?rom={romName}`  
+  Starts a new emulator session for the specified ROM. Returns a temporary URL to access the VNC frontend.
 
-    Make sure your media directory contains only intended media files to avoid exposing sensitive data
+- `GET /roms/{romName}`  
+  Serves raw ROM content to RetroArch
 
-Troubleshooting
+- `GET /saves/{saveFile}`  
+  Fetches the latest save state for a user and ROM
 
-    No audio on some videos: Ensure codecs are supported by the browser/player.
+- `POST /saves/{saveFile}`  
+  Uploads a save state to the server (automatically triggered by the emulator)
 
-    Playlist scrolling not working: Verify JavaScript console errors in your browser.
+---
 
-    Media files not found: Check media directory path and file permissions.
+## Emulator Architecture
 
+This project uses **RetroArch** with the **mGBA core**, launched in isolated Docker containers with per-user config, save, and runtime directories.
+
+- Save files are mapped by user and ROM name: `username-ROM.sav`
+- Each emulator session runs on a dynamically allocated port
+- VNC is used to display the emulator frontend in-browser
+- Save state upload is triggered via JavaScript or emulator flush
+
+---
+
+## Deployment
+
+- Java 17+
+- Maven or your preferred Spring Boot build tool
+- Docker (required for emulator functionality)
+- A media directory, defined via `media.dir` in application config or env
+
+### Example launch (with systemd):
+
+```ini
+[Unit]
+Description=ServerShell
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/java -jar /opt/serverShell/serverShell-prod.jar
+WorkingDirectory=/srv/
+Restart=always
+EnvironmentFile=/etc/serverShell.env
+
+[Install]
+WantedBy=multi-user.target
+```
 ## TODO
 
 - [✅] security logs, who accessed what from where (v0.1.1)
 - [✅] stop current song playing when starting a song from playlist (v0.1.1)
 - [✅] Keep user sound setting between playback (v0.1.1)
-- [✅] Better listing - maybe have submenu by letter that shows all items that start with the letter (v0.1.2)
+- [✅] Better listing - have submenu by letter that shows all items that start with the letter (v0.1.2)
 - [✅] beautify UI - part 1 (v0.1.2)
+- [✅] breakup index.html (v0.1.3)
+- [✅] Ereader functionality (v0.1.3)
 - [✅] Search bar (v0.1.4)
 - [✅] fix back button on virtual directories (v0.1.5)
-  [✅] current file banner (v0.1.5)
+- [✅] current file banner (v0.1.5)
+- [✅] GameBoy Emulator functionality (v0.1.6-v1.0.0)
+- [ ] beautify UI - part 2 (v1.0.1)
+- [ ] back button overhaul (v1.0.1)
+- [ ] js and css refactor (v1.0.1)
+- [ ] Better GameBoy Controls
 - [ ] view toggle
 - [ ] eupub user controls
 - [ ] Show some onscreen error if there was a problem with media playback
-- [ ] logup service, maybe (only send a request, dont auto add to user list)
+- [ ] logup service 
 - [ ] user self service portal (user login stats, recent views, and change password)
-- [✅] breakup index.html (v0.1.3)
-- [ ] beautify UI - part 2
-- [✅] Ereader functionality (v0.1.3)
-- [ ] split out into microservices (why am i using spring?)
+- [ ] split out services into microservices
 - [ ] user media request service
-  [✅] GameBoy Emulator functionality (v0.1.6)
-  [] Better GameBoy Controls
-- [ ] N64 Emulator functionality (more complex, has to handle controller inputs)
-
-##None code TODO
-- [✅] change avi and mkv to mp4 - In Progress
-- [ ] fix curated list of epubs to add
-- [ ] fix more playlists
+- [ ] N64 Emulator functionality
+- [ ] beautify UI - part 3
+- [ ] Self.pentest
+- [ ] 

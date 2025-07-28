@@ -4,12 +4,13 @@
 import {
   getCurrentPath,
   setCurrentPath,
+  peekPath,
   setFileList,
   setLastClickedGroupLabel,
   getLastClickedGroupLabel,
   setInVirtualGroup,
   setMediaRoot,
-  resetHistory,
+  resetPathHistory,
   groupFoldersByLetter,
   sortItems
 } from "/media/mediaState.js";
@@ -21,14 +22,26 @@ import {
 } from "/explorer/mediaExplorer.js";
 
 import { loadPlaylist } from "/media/playlistManager.js";
-import { updateBackButtonVisibility } from "/ui/backButton.js";
-
+import { updateBackButton } from "/ui/backButton.js";
 import {
     getIsLoading,
     setIsLoading,
+    setShowBackButton,
+    toggleMediaButtons,
 } from "/ui/loading.js"
+
 const mediaTree = document.getElementById("mediaTree");
 
+//avoid recursion where i dont want
+export function firstRender(path){
+    resetPathHistory(path);
+    setMediaRoot(path);
+    toggleMediaButtons(false);
+    setShowBackButton(false);
+    renderFolder(path);
+}
+
+//logic to render the folder structure based on directory found
 export function renderFolder(path) {
   const encoded = encodeURIComponent(path);
   const apiPath = `/media/api/list?path=${encoded}`;
@@ -37,10 +50,8 @@ export function renderFolder(path) {
   
   //set current load logic
   setIsLoading(true);
-  setMediaRoot(path);
-  resetHistory(path); 
-  toggleMediaButtons(false);
   if (mediaTree) mediaTree.innerHTML = "Loading...";
+  
   console.log("Fetching folder contents:", apiPath);
   
   //fetch data
@@ -58,7 +69,7 @@ export function renderFolder(path) {
       setFileList(files);
       setCurrentPath(path || "");
       updateSearchVisibility();
-
+      updateBackButton(path);
       const prefix = getCurrentPath() ? getCurrentPath() + "/" : "";
       const searchQuery = getSearchQuery();
 
@@ -90,8 +101,6 @@ export function renderFolder(path) {
         setInVirtualGroup(false);
         renderSimpleListView(folders, normalFiles, prefix);
       }
-
-      updateBackButtonVisibility();
     })
     .catch((err) => {
       console.error("Error loading folder:", err);
@@ -185,17 +194,6 @@ export function renderVirtualGroup(letter, items) {
   scrollContainer.id = "media-scroll";
   scrollContainer.appendChild(ul);
   mediaTree.appendChild(scrollContainer);
-}
-
-export function toggleMediaButtons(show) {
-  const buttons = document.querySelectorAll(".media-btn");
-  buttons.forEach((btn) => {
-    if (show) {
-      btn.classList.remove("disabled");
-    } else {
-      btn.classList.add("disabled");
-    }
-  });
 }
 
 function renderSimpleListView(folders, files, prefix) {

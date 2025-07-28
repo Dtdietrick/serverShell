@@ -3,63 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <title>Media Explorer</title>
-  <link rel="stylesheet" href="style.css" />
+  <!-- Basic styles -->
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/layout.css">
+  <link rel="stylesheet" href="/css/theme.css">
+  <!-- Component styles -->
+  <link rel="stylesheet" href="/css/components/buttons.css">
+  <link rel="stylesheet" href="/css/components/mainMenu.css">
+  <link rel="stylesheet" href="/css/components/mediaTree.css">
+  <link rel="stylesheet" href="/css/components/mediaViewer.css">
+  <link rel="stylesheet" href="/css/components/playlist.css">
+  <link rel="stylesheet" href="/css/components/spinner.css">
 </head>
 <body>
-  <h2>The Stash</h2>
-  <button onclick="logout()">🚪 Logout</button>
-  <button onclick="window.location.href='/dashboard.html'">📊 Dashboard</button>
-  
-  
-  <div id="pinned-launchers">
-    <div id="rom-launcher">
-      <h3>🎮 Choose a Game</h3>
-      <ul>
-        <li><button onclick="launchEmulator('Pokemon-Red.gb',this)">🟥 Pokemon Red</button></li>
-        <li><button onclick="launchEmulator('Pokemon-Emerald.gba',this)">🟢 Pokemon Emerald</button></li>
-      </ul>
-    </div>
-    <div id="media-launcher">
-      <h3>📁 Browse Media</h3>
-      <ul>
-        <li><button onclick="renderFolder('Books')" class="media-btn">📚 Books</button></li>
-        <li><button onclick="renderFolder('TV')" class="media-btn">📺 TV</button></li>
-        <li><button onclick="renderFolder('Movies')" class="media-btn">🎬 Movies</button></li>
-        <li><button onclick="renderFolder('Music')" class="media-btn">🎵 Music</button></li>
-      </ul>
-    </div>
-    <input
-      type="text"
-      id="media-search"
-      placeholder="Search..."
-      style="display: none; margin: 0.5rem 1rem; padding: 0.3rem; width: 80%;"
-    />
-    <div id="back-button">⬅️ Back</div>
-  </div>
-  
+    <!-- Top nav -->
+    <h2>The Stash</h2>
+    <button onclick="logout()">🚪 Logout</button>
+    <button onclick="window.location.href='/dashboard.html'">📊 Dashboard</button>
 
-  <div id="main-layout">
-    <div id="mediaTree">Select A Media Type First...</div>
-    <div id="player"></div>
-  </div>
-  
-  <div id="loading-spinner">⏳ Loading ...</div>
-  
-
-  <!-- Playlist popup UI -->
-  <div id="playlist-popup">
-    <span class="close-btn" onclick="closePlaylist()">✖</span>
-    <h3>🎵 Playlist</h3>
-    <ul id="playlist-items"></ul>
-
-    <div id="playlist-controls" style="margin: 1rem 0; text-align: center;">
-      <button onclick="prevInPlaylist()">⏮ Prev</button>
-      <button onclick="nextInPlaylist()">⏭ Next</button>
-      <button id="shuffle-button" onclick="shufflePlaylist()">🔀 Shuffle</button>
+    <!-- Launchers/Nav -->
+    <div id="pinned-launchers">
+      <div id="rom-launcher">
+        <h3>🎮 Choose a Game</h3>
+        <ul>
+          <li><button onclick="launchEmulator('Pokemon-Red.gb',this)">🟥 Pokemon Red</button></li>
+          <li><button onclick="launchEmulator('Pokemon-Emerald.gba',this)">🟢 Pokemon Emerald</button></li>
+        </ul>
+      </div>
+      <div id="media-launcher">
+        <h3>📁 Browse Media</h3>
+        <ul>
+          <li><button onclick="firstRender('Books')" class="media-btn">📚 Books</button></li>
+          <li><button onclick="firstRender('TV')" class="media-btn">📺 TV</button></li>
+          <li><button onclick="firstRender('Movies')" class="media-btn">🎬 Movies</button></li>
+          <li><button onclick="firstRender('Music')" class="media-btn">🎵 Music</button></li>
+        </ul>
+      </div>
+      <input
+        type="text"
+        id="media-search"
+        placeholder="Search..."
+        style="display: none; margin: 0.5rem 1rem; padding: 0.3rem; width: 80%;"
+      />
+      <div class="back-btn">⬅️ Back</div>
     </div>
 
-    <div id="popup-player"></div>
-  </div>
+    <!-- MAIN LAYOUT -->
+    <div id="main-layout">
+      <div id="mediaTree">Select A Media Type First...</div>
+      
+      <!-- New media viewer -->
+      <div id="media-viewer">
+        <div class="viewer-content" id="viewer-player">
+          <h3>📺 Viewer</h3>
+          <p>No media selected yet.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spinner -->
+    <div id="loading-spinner">⏳ Loading ...</div>
+
+    <!-- Playlist Popup (unchanged) -->
+    <div id="playlist-popup">
+      <span class="close-btn" onclick="closePlaylist()">✖</span>
+      <h3>🎵 Playlist</h3>
+      <ul id="playlist-items"></ul>
+
+      <div id="playlist-controls" style="margin: 1rem 0; text-align: center;">
+        <button onclick="prevInPlaylist()">⏮ Prev</button>
+        <button onclick="nextInPlaylist()">⏭ Next</button>
+        <button id="shuffle-button" onclick="shufflePlaylist()">🔀 Shuffle</button>
+      </div>
+
+      <div id="popup-player"></div>
+    </div>
 
   <!-- Main logic pulled in as ES modules -->
   <script type="module">
@@ -76,11 +94,10 @@
 
     //virtual grouping
     import { 
-        renderFolder,
+        firstRender,
         renderVirtualGroup 
     } from '/explorer/virtualExplorer.js';
-    //backBtn
-    import { updateBackButtonVisibility } from "/ui/backButton.js";
+    
     // Playlist logic
     import {
       initPlaylist,
@@ -99,12 +116,11 @@
       logout,
       launchEmulator,
       //media
-      renderFolder,
+      firstRender,
       renderVirtualGroup,
       playMedia,
       stopAllMedia,
       applyPlayerSettings,
-      updateBackButtonVisibility,
       //playlists
       loadPlaylist,
       nextInPlaylist,

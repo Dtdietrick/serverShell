@@ -1,0 +1,8 @@
+/*eventually centralize "my theme" color, spacing, and font values here */
+
+:root {
+  --border-radius: 8px;
+  --shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+  --primary-color: #333;
+  --accent-color: orange;
+}
