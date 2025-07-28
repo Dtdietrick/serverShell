@@ -1,0 +1,12 @@
+button.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.back-button {
+  margin-bottom: 1rem;
+  cursor: pointer;
+  color: blue;
+  text-decoration: underline;
+}

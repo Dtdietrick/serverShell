@@ -1,16 +1,28 @@
-//handle media explorer variables
+//File:mediaState.js
+
+//handle media explorer variables globally
 let currentPath = "";
 let lastClickedGroupLabel = null;
 let fileList = [];
+let inVirtualGroup = false;
+let mediaRoot = "";
+let pathHistory = [];
 
 export function getCurrentPath() { return currentPath; }
-export function setCurrentPath(p) { currentPath = p; }
+export function setCurrentPath(path) { currentPath = path; }
+
 
 export function getFileList() { return fileList; }
-export function setFileList(f) { fileList = f; }
+export function setFileList(file) { fileList = file; }
 
 export function getLastClickedGroupLabel() { return lastClickedGroupLabel; }
 export function setLastClickedGroupLabel(label) { lastClickedGroupLabel = label; }
+
+export function isInVirtualGroup() { return inVirtualGroup; }
+export function setInVirtualGroup(flag) { inVirtualGroup = flag; }
+
+export function setMediaRoot(path) {mediaRoot = path.split("/")[0];} // e.g., "TV" from "TV/B"
+export function getMediaRoot() { return mediaRoot; }
 
 export function groupFoldersByLetter(folders, files, searchQuery = "") {
   const letterGroups = {};
@@ -44,4 +56,31 @@ export function sortItems(items) {
   return [...items]
     .filter(item => item && item.trim() !== "" && item !== "/")
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+
+//Path history logic
+export function pushPath(path) {
+  if (!path || path === pathHistory[pathHistory.length - 1]) return;
+  pathHistory.push(path);
+}
+
+export function popPath() {
+  if (pathHistory.length > 1) {
+    pathHistory.pop(); // drop current
+    return pathHistory[pathHistory.length - 1]; // previous
+  }
+  return pathHistory[0]; // root fallback
+}
+
+export function getPathHistory() {
+  return [...pathHistory];
+}
+
+export function resetPathHistory(rootPath) {
+  pathHistory = [rootPath]; // reset with just the root
+}
+
+export function peekPath() {
+  return pathHistory[pathHistory.length - 1];
 }

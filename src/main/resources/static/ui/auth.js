@@ -1,4 +1,4 @@
-// auth.js
+//File:auth.js
 
 /**
  * Logout user and redirect to login page.

@@ -1,0 +1,46 @@
+#main-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+}
+
+#mediaTree {
+  flex: 1;
+  max-width: 25%;
+  overflow-y: auto;
+}
+
+#player {
+  width: 75%;
+  position: sticky;
+  top: 2rem;
+  align-self: flex-start;
+}
+
+/* FILE: layout.css */
+
+/* Layout positioning for pinned launcher */
+#pinned-launchers {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding: 0.5rem 1rem;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Group containers laid out in a column for rom and media */
+#rom-launcher,
+#media-launcher {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Lay buttons out horizontally */
+#rom-launcher ul,
+#media-launcher ul {
+  display: flex;
+  flex-wrap: wrap;
+}
