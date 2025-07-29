@@ -7,7 +7,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.dtd.serverShell.config.allowedMediaType;
 import com.dtd.serverShell.services.MediaService;
 import com.dtd.serverShell.services.UserProfileService;
 
@@ -41,18 +45,26 @@ public class MediaController {
 	private static final Logger log = LoggerFactory.getLogger(MediaController.class);
 	private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.serverShell.audit");
     private final MediaService mediaService;
+    private final allowedMediaType allowedmediaType;
     private final AntPathMatcher pathMatcher = new AntPathMatcher(); // Used for pattern matching URI paths
     private final UserProfileService userProfileService;
     
-    public MediaController(MediaService mediaService, UserProfileService userProfileService) {
+    public MediaController(MediaService mediaService, UserProfileService userProfileService, allowedMediaType allowedmediaType) {
         this.mediaService = mediaService;
         this.userProfileService = userProfileService;
+        this.allowedmediaType = allowedmediaType;
     }
+    
     @GetMapping("/list")
     public ResponseEntity<List<String>> listMediaFiles(@RequestParam(name = "path", defaultValue = "") String currentPath) {
         return ResponseEntity.ok(mediaService.listMediaFiles(currentPath));
     }
-
+    
+    @GetMapping("/allowedType")
+    public ResponseEntity<Boolean> isAllowedType(@RequestParam(name = "path", defaultValue = "") String currentType) {
+        return ResponseEntity.ok(allowedMediaType.isSupportedMediaFile(currentType));
+    }
+    
     @GetMapping("/playlists")
     public ResponseEntity<List<String>> listPlaylists() {
         // Endpoint to list all playlists available; returns list from MediaService

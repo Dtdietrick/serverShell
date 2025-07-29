@@ -123,10 +123,14 @@ WantedBy=multi-user.target
 - [✅] fix back button on virtual directories (v0.1.5)
 - [✅] current file banner (v0.1.5)
 - [✅] GameBoy Emulator functionality (v0.1.6-v1.0.0)
-- [ ] beautify UI - part 2 (v1.0.1)
-- [ ] back button overhaul (v1.0.1)
-- [ ] js and css refactor (v1.0.1)
+- [✅] beautify UI - part 2 (v1.0.0.1)
+- [✅] back button overhaul (v1.0.0.1)
+- [✅] js and css refactor (v1.0.0.1)
+- [ ] dashboard history jumps to media
+- [ ] only render allowed media
+- [ ] split file and path js
 - [ ] Better GameBoy Controls
+- [ ] User favorite playlist
 - [ ] view toggle
 - [ ] eupub user controls
 - [ ] Show some onscreen error if there was a problem with media playback

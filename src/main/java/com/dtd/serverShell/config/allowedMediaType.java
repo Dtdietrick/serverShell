@@ -3,11 +3,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 // Determine MediaType from filename extension for proper HTTP Content-Type header
 import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
 
+@Service
 public class allowedMediaType{
 	private static final Logger log = LoggerFactory.getLogger(allowedMediaType.class);
 	
-	public MediaType getMediaType(String filename) {
+	public static MediaType getMediaType(String filename) {
         String lower = filename.toLowerCase();
 
         if (lower.endsWith(".mp4")) return MediaType.valueOf("video/mp4");
@@ -28,11 +30,13 @@ public class allowedMediaType{
         return MediaType.APPLICATION_OCTET_STREAM;
     }
 	
-    public boolean isSupportedMediaFile(String name) {
+    public static boolean isSupportedMediaFile(String name) {
         String lower = name.toLowerCase();
-        return lower.endsWith(".mp3") || lower.endsWith(".mp4") || lower.endsWith(".wav")
-            || lower.endsWith(".avi") || lower.endsWith(".mkv") || lower.endsWith(".webm")
-            || lower.endsWith(".ogg") || lower.endsWith(".flac") || lower.endsWith(".m3u")
-            || lower.endsWith(".epub");  // <-- add epub here
+        String extension = lower.substring(lower.lastIndexOf('.'));
+        
+        return extension.endsWith(".mp3") || extension.endsWith(".mp4") || extension.endsWith(".wav")
+            || extension.endsWith(".avi") || extension.endsWith(".mkv") || extension.endsWith(".webm")
+            || extension.endsWith(".ogg") || extension.endsWith(".flac") || extension.endsWith(".m3u")
+            || extension.endsWith(".epub"); 
     }
 }

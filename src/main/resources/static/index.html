@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <title>Media Explorer</title>
+  
+  <!-- Pico theme -->
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@latest/css/pico.min.css">
   <!-- Basic styles -->
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/layout.css">
@@ -14,6 +17,8 @@
   <link rel="stylesheet" href="/css/components/mediaViewer.css">
   <link rel="stylesheet" href="/css/components/playlist.css">
   <link rel="stylesheet" href="/css/components/spinner.css">
+  <!-- 404 fav icon -->
+  <link rel="icon" href="data:,">
 </head>
 <body>
     <!-- Top nav -->
@@ -111,6 +116,7 @@
 
     import { launchEmulator } from '/emulator/emulator.js';
     import { attachLauncherSpinnerEvents } from "/ui/onClick.js";
+    import { handleJumpParam } from '/media/dashboardMedia.js';
     
     Object.assign(window, {
       logout,
@@ -133,7 +139,8 @@
     setPlayMediaCallback(playMedia);
     //emulator
     initPlaylist();
-    
+    //dashboard media
+    handleJumpParam();
     window.addEventListener("DOMContentLoaded", () => {
       attachLauncherSpinnerEvents();
     });

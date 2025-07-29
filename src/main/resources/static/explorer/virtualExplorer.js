@@ -8,7 +8,6 @@ import {
   setFileList,
   setLastClickedGroupLabel,
   getLastClickedGroupLabel,
-  setInVirtualGroup,
   setMediaRoot,
   resetPathHistory,
   groupFoldersByLetter,
@@ -95,10 +94,8 @@ export function renderFolder(path) {
       const shouldGroup = (folders.length + normalFiles.length > threshold);
 
       if (shouldGroup) {
-        setInVirtualGroup(false)
         renderGroupedAZView(folders, normalFiles, prefix, searchQuery);
       } else {
-        setInVirtualGroup(false);
         renderSimpleListView(folders, normalFiles, prefix);
       }
     })
@@ -141,7 +138,6 @@ export function renderGroupedAZView(folders, files, prefix, searchQuery) {
 export function renderVirtualGroup(letter, items) {
   mediaTree.innerHTML = `<h4>Group: ${letter}</h4>`;
   setLastClickedGroupLabel(letter);
-  setInVirtualGroup(true);
   
   const ul = document.createElement("ul");
   const prefix = getCurrentPath() ? getCurrentPath() + "/" : "";
