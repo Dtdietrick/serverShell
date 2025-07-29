@@ -4,21 +4,28 @@
   flex: 1;
   padding: 1rem;
   background: #fff;
-  height: 600px; /* match mediaTree height */
-  overflow: hidden; /* 🔥 disables scrolling */
+  height: 600px;
+  overflow: hidden; /* keep this! */
   box-sizing: border-box;
   border-left: 1px solid #ccc;
   box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
-
 /* Optional: Add an inner div with overflow auto if you ever want manual control */
-.viewer-content {
-  height: 100%;
-  overflow: hidden; /* 🔥 stays static */
-  padding-right: 1rem;
+#media-viewer video,
+#media-viewer audio {
+  flex-shrink: 1;
+  flex-grow: 1;
+  max-height: 100%;
+  width: 100%;
+  object-fit: contain;
+  margin: 0;           /* NO bottom padding or margin */
+  padding: 0;          /* Do not pad, it pushes height! */
+  box-sizing: border-box;
 }
-
 #media-viewer audio,
 #media-viewer video {
   width: 100%;

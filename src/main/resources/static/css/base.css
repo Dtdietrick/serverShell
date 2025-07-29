@@ -1,7 +1,42 @@
+/* Custom Fonts */
+
+@font-face {
+  font-family: 'Yrsa';
+  src: url('/fonts/Yrsa-Regular.ttf') format('ttf');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Yrsa';
+  src: url('/fonts/Yrsa-Bold.ttf') format('ttf');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Yrsa';
+  src: url('/fonts/Yrsa-Light.ttf') format('ttf');
+  font-weight: light;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Yrsa';
+  src: url('/fonts/Yrsa-Medium.ttf') format('ttf');
+  font-weight: medium;
+  font-style: normal;
+}
+
 /* Basic page styling */
 body {
-  font-family: sans-serif;
-  padding: 2rem;
+  font-family: 'Yrsa', system-ui;
+  font-size: 20px;
+  color: #000000;
+  background-color: #121212;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
 }
 
 /* General list reset */

@@ -1,6 +1,6 @@
 // File: /explorer/jumpHandler.js
 
-import { renderFolder } from '/explorer/virtualExplorer.js';
+import { renderFolder } from '/explorer/explorer.js';
 
 export function handleJumpParam() {
   const params = new URLSearchParams(window.location.search);

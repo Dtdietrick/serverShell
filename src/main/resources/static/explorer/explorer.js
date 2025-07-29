@@ -1,26 +1,30 @@
-// File: virtualExplorer.js
+// File: explorer.js
 
-// mediaState logic for variables
+// state logic for variables
 import {
   getCurrentPath,
   setCurrentPath,
-  peekPath,
-  setFileList,
   setLastClickedGroupLabel,
   getLastClickedGroupLabel,
   setMediaRoot,
-  resetPathHistory,
-  groupFoldersByLetter,
-  sortItems
-} from "/media/mediaState.js";
+} from "/explorer/path.js";
 
 import {
-  updateSearchVisibility,
-  getSearchQuery,
-  playMedia
-} from "/explorer/mediaExplorer.js";
+  setFileList,
+  groupFoldersByLetter,
+  sortItems
+} from "/explorer/file.js";
 
-import { loadPlaylist } from "/media/playlistManager.js";
+import {
+  peekHistory,
+  resetHistory,
+} from "/explorer/history.js";
+
+import {
+  playMedia
+} from "/media/media.js";
+
+import { loadPlaylist } from "/media/mediaPlaylist.js";
 import { updateBackButton } from "/ui/backButton.js";
 import {
     getIsLoading,
@@ -33,7 +37,7 @@ const mediaTree = document.getElementById("mediaTree");
 
 //avoid recursion where i dont want
 export function firstRender(path){
-    resetPathHistory(path);
+    resetHistory(path);
     setMediaRoot(path);
     toggleMediaButtons(false);
     setShowBackButton(false);
@@ -238,4 +242,28 @@ function renderSimpleListView(folders, files, prefix) {
   scrollContainer.id = "media-scroll";
   scrollContainer.appendChild(ul);
   mediaTree.appendChild(scrollContainer);
+}
+
+// Show/hide the search input based on whether we're in root
+export function updateSearchVisibility() {
+  const searchInput = document.getElementById("media-search");
+  if (searchInput) {
+    if (!getCurrentPath()) {
+      searchInput.style.display = "none";
+      searchInput.value = "";
+    } else {
+      searchInput.style.display = "block";
+    }
+  }
+}
+// Get the current lowercase search input
+export function getSearchQuery() {
+  return (document.getElementById("media-search")?.value || "").toLowerCase();
+}
+
+const searchInput = document.getElementById("media-search");
+if (searchInput) {
+  searchInput.addEventListener("input", () => {
+    renderFolder(getCurrentPath());
+  });
 }

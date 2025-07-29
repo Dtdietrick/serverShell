@@ -95,13 +95,13 @@
       playMedia,
       stopAllMedia,
       applyPlayerSettings
-    } from '/explorer/mediaExplorer.js';
+    } from '/media/media.js';
 
     //virtual grouping
     import { 
         firstRender,
         renderVirtualGroup 
-    } from '/explorer/virtualExplorer.js';
+    } from '/explorer/explorer.js';
     
     // Playlist logic
     import {
@@ -112,11 +112,11 @@
       prevInPlaylist,
       closePlaylist,
       shufflePlaylist
-    } from '/media/playlistManager.js';
+    } from '/media/mediaPlaylist.js';
 
     import { launchEmulator } from '/emulator/emulator.js';
     import { attachLauncherSpinnerEvents } from "/ui/onClick.js";
-    import { handleJumpParam } from '/media/dashboardMedia.js';
+    import { handleJumpParam } from '/media/mediaDashboard.js';
     
     Object.assign(window, {
       logout,

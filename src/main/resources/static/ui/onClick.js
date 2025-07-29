@@ -1,5 +1,5 @@
 //File:onClick.js
-import { showGlobalSpinner, hideGlobalSpinner } from "./loading.js";
+import { showGlobalSpinner, hideGlobalSpinner } from "/ui/loading.js";
 
 export function attachLauncherSpinnerEvents() {
   const launcher = document.getElementById("pinned-launchers");

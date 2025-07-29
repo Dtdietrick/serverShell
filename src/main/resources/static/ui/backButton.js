@@ -1,22 +1,26 @@
 //File:backbutton.js
 
 import {
+  pushHistory,
+  popHistory,
+  peekHistory,
+} from "/explorer/history.js";
+
+import {
   getCurrentPath,
   setCurrentPath,
-  pushPath,
-  popPath,
-  peekPath,
   getLastClickedGroupLabel,
   setLastClickedGroupLabel,
   getMediaRoot
-} from "/media/mediaState.js";
+} from "/explorer/path.js";
 
 import { 
     getShowBackButton, 
-    setShowBackButton,
+    setShowBackButton
 } from "/ui/loading.js";
 
-import { renderFolder } from "/explorer/virtualExplorer.js";
+import { renderFolder } from "/explorer/explorer.js";
+
 // Back button navigates up one folder and fetches new data
 const backButton = document.querySelector(".back-btn");
 backButton.onclick = () => {
@@ -25,7 +29,7 @@ backButton.onclick = () => {
 
   if (!current || current === root) return;
 
-  const prev = popPath();
+  const prev = popHistory();
   console.log("Back to:", prev);
 
   if (prev === root) {
@@ -35,12 +39,12 @@ backButton.onclick = () => {
   setCurrentPath(prev);
   renderFolder(prev);
 };
-//console.log("peekPath:", peekPath());
+//console.log("peekHistory:", peekHistory());
 //console.log("pathHistory:", getPathHistory());
 export function updateBackButton(path) {
   const show = getShowBackButton();
   const root = getMediaRoot();
-  const prev = peekPath();
+  const prev = peekHistory();
   console.log(`before update: ${path}`);
   const atRoot = path === root;
 
@@ -52,7 +56,7 @@ export function updateBackButton(path) {
 
   // push to path history ONLY if it's a new path
   if (!atRoot && path !== prev) {
-    pushPath(path);
+    pushHistory(path);
   }
   
   console.log(`after update: ${path}`);
