@@ -18,9 +18,6 @@ export function setFileList(file) { fileList = file; }
 export function getLastClickedGroupLabel() { return lastClickedGroupLabel; }
 export function setLastClickedGroupLabel(label) { lastClickedGroupLabel = label; }
 
-export function isInVirtualGroup() { return inVirtualGroup; }
-export function setInVirtualGroup(flag) { inVirtualGroup = flag; }
-
 export function setMediaRoot(path) {mediaRoot = path.split("/")[0];} // e.g., "TV" from "TV/B"
 export function getMediaRoot() { return mediaRoot; }
 
@@ -83,4 +80,12 @@ export function resetPathHistory(rootPath) {
 
 export function peekPath() {
   return pathHistory[pathHistory.length - 1];
+}
+
+export async function isAllowedMediaType(path) {
+  const res = await fetch(`/media/allowedType?path=${encodeURIComponent(path)}`);
+  if (!res.ok) return false;
+
+  const allowed = await res.json(); // boolean from backend
+  return allowed === true;
 }

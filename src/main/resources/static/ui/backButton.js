@@ -8,8 +8,6 @@ import {
   peekPath,
   getLastClickedGroupLabel,
   setLastClickedGroupLabel,
-  isInVirtualGroup,
-  setInVirtualGroup,
   getMediaRoot
 } from "/media/mediaState.js";
 
@@ -32,7 +30,6 @@ backButton.onclick = () => {
 
   if (prev === root) {
     setLastClickedGroupLabel("");
-    setInVirtualGroup(false);
   }
 
   setCurrentPath(prev);

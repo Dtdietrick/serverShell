@@ -7,7 +7,6 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -22,6 +21,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.dtd.serverShell.config.allowedMediaType;
 
 @Service
 public class MediaService {
@@ -60,7 +60,7 @@ public class MediaService {
 
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.ACCEPT_RANGES, "bytes"); // Support partial content requests (streaming)
-        headers.setContentType(getMediaType(filename));
+        headers.setContentType(allowedMediaType.getMediaType(filename));
 
         // Handle HTTP Range header for streaming partial content (e.g., video/audio seeking)
         if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
@@ -103,27 +103,6 @@ public class MediaService {
         headers.setContentLength(fileLength);
         return new ResponseEntity<>(resource, headers, HttpStatus.OK);
     }
-
-    // Determine MediaType from filename extension for proper HTTP Content-Type header
-    private MediaType getMediaType(String filename) {
-        String lower = filename.toLowerCase();
-
-        if (lower.endsWith(".mp4")) return MediaType.valueOf("video/mp4");
-        if (lower.endsWith(".webm")) return MediaType.valueOf("video/webm");
-        if (lower.endsWith(".ogg")) return MediaType.valueOf("video/ogg");
-        if (lower.endsWith(".avi")) return MediaType.valueOf("video/x-msvideo");
-        if (lower.endsWith(".mkv")) return MediaType.valueOf("video/x-matroska");
-
-        if (lower.endsWith(".mp3")) return MediaType.valueOf("audio/mpeg");
-        if (lower.endsWith(".wav")) return MediaType.valueOf("audio/wav");
-        if (lower.endsWith(".flac")) return MediaType.valueOf("audio/flac");
-        if (lower.endsWith(".ogg")) return MediaType.valueOf("audio/ogg");
-
-        if (lower.endsWith(".epub")) return MediaType.valueOf("application/epub+zip");  // <-- add epub content type
-
-        // Default binary stream if unknown type
-        return MediaType.APPLICATION_OCTET_STREAM;
-    }
     
     // Recursively list media files under mediaDir with supported extensions
     public List<String> listMediaFiles(String currentPath) {
@@ -145,7 +124,7 @@ public class MediaService {
                         String folderName = p.getFileName().toString();
                         return !folderName.equalsIgnoreCase("lost+found");
                     } else {
-                        return isSupportedMediaFile(p.getFileName().toString());
+                        return allowedMediaType.isSupportedMediaFile(p.getFileName().toString());
                     }
                 })
                 // Map to relative path from basePath, normalized with '/' separator
@@ -174,15 +153,6 @@ public class MediaService {
             return List.of();
         }
     }
-
-    private boolean isSupportedMediaFile(String name) {
-        String lower = name.toLowerCase();
-        return lower.endsWith(".mp3") || lower.endsWith(".mp4") || lower.endsWith(".wav")
-            || lower.endsWith(".avi") || lower.endsWith(".mkv") || lower.endsWith(".webm")
-            || lower.endsWith(".ogg") || lower.endsWith(".flac") || lower.endsWith(".m3u")
-            || lower.endsWith(".epub");  // <-- add epub here
-    }
-
     
     // List all playlist names (without .m3u extension) in the playlists subfolder of mediaDir
     public List<String> listPlaylists() {

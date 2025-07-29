@@ -1,27 +1,48 @@
-<h2>Recently Viewed Items</h2>
-<ul id="recent-views"></ul>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Media Explorer</title>
 
-<h2>ROM Saves</h2>
-<ul id="rom-saves"></ul>
+  <!-- Pico theme -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@latest/css/pico.min.css">
+</head>
+<body>
 
-<script>
-  fetch('/user/dashboard')
-    .then(res => res.json())
-    .then(data => {
-      const viewsList = document.getElementById('recent-views');
-      data.recentViews.forEach(item => {
-        const li = document.createElement('li');
-        li.textContent = item;
-        viewsList.appendChild(li);
-      });
+  <main class="container">
+    <h2>Recently Viewed Items</h2>
+    <ul id="recent-views"></ul>
 
-      const savesList = document.getElementById('rom-saves');
-      if (data.recentRomSaves) {
-        Object.entries(data.recentRomSaves).forEach(([rom, file]) => {
+    <h2>ROM Saves</h2>
+    <ul id="rom-saves"></ul>
+  </main>
+
+  <script>
+    fetch('/user/dashboard')
+      .then(res => res.json())
+      .then(data => {
+        const viewsList = document.getElementById('recent-views');
+        data.recentViews.forEach(item => {
           const li = document.createElement('li');
-          li.textContent = `${rom} → ${file}`;
-          savesList.appendChild(li);
+          const a = document.createElement('a');
+
+          a.href = `/index.html?jumpTo=${encodeURIComponent(item)}`;
+          a.textContent = item;
+
+          li.appendChild(a);
+          viewsList.appendChild(li);
         });
-      }
-    });
-</script>
+
+        const savesList = document.getElementById('rom-saves');
+        if (data.recentRomSaves) {
+          Object.entries(data.recentRomSaves).forEach(([rom, file]) => {
+            const li = document.createElement('li');
+            li.textContent = `${rom} → ${file}`;
+            savesList.appendChild(li);
+          });
+        }
+      });
+  </script>
+
+</body>
+</html>
