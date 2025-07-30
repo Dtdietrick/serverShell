@@ -127,6 +127,7 @@ WantedBy=multi-user.target
 - [✅] back button overhaul (v1.0.0.1)
 - [✅] js and css refactor (v1.0.0.1)
 - [ ] dashboard history jumps to media
+- [ ] no more ghost folders
 - [ ] only render allowed media
 - [ ] split file and path js
 - [ ] Better GameBoy Controls

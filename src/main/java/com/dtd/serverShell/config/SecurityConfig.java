@@ -6,13 +6,28 @@ import com.dtd.serverShell.security.CustomUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.*;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import passwordHasher.passwordHasher;
 
 @Configuration
 public class SecurityConfig {
 
+
+@Bean
+public PasswordEncoder passwordEncoder() {
+    return new PasswordEncoder() {
+        @Override
+        public String encode(CharSequence rawPassword) {
+            return passwordHasher.hash(rawPassword.toString());
+        }
+
+        @Override
+        public boolean matches(CharSequence rawPassword, String encodedPassword) {
+            return passwordHasher.matches(rawPassword.toString(), encodedPassword);
+        }
+    };
+}
 	@Autowired
 	private CustomLoginSuccessHandler customLoginSuccessHandler;
 	
@@ -22,10 +37,6 @@ public class SecurityConfig {
         this.userDetailsService = userDetailsService;
     }
     
-    @Bean
-    public BCryptPasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(); // used to hash passwords
-    }
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
@@ -37,8 +48,12 @@ public class SecurityConfig {
             	        "/roms/**",
             	        "/saves/**",       
             	        "/login", "/logout",
-            	        "/css/**", "/js/**","/epubReader.html"
+            	        "/css/**", "/js/**",
+            	        "/epubReader.html",
+            	        "/user/role"
             	    ).permitAll()
+            	    .requestMatchers("/admin/**").hasRole("ADMIN")
+            	    .requestMatchers("/user/**").authenticated()
             	    .anyRequest().authenticated()
             )
             .formLogin(form -> form
