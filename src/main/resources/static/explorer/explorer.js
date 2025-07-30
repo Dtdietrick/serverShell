@@ -97,11 +97,13 @@ export function renderFolder(path) {
       const pathRoot = getCurrentPath().split("/")[0];
       const shouldGroup = (folders.length + normalFiles.length > threshold);
 
-      if (shouldGroup) {
-        renderGroupedAZView(folders, normalFiles, prefix, searchQuery);
-      } else {
-        renderSimpleListView(folders, normalFiles, prefix);
-      }
+      renderListView({
+        folders,
+        files: normalFiles,
+        prefix,
+        isGrouped: shouldGroup
+      });
+      
     })
     .catch((err) => {
       console.error("Error loading folder:", err);
@@ -113,129 +115,69 @@ export function renderFolder(path) {
     });
 }
 
-export function renderGroupedAZView(folders, files, prefix, searchQuery) {
+function renderListView({ folders, files, prefix, isGrouped = false, groupLabel = null }) {
+  mediaTree.innerHTML = groupLabel ? `<h4>Group: ${groupLabel}</h4>` : "";
+
   const ul = document.createElement("ul");
-  const currentPath = getCurrentPath();
-  console.log("Virtual render for current path:", currentPath);
 
-  const letterGroups = groupFoldersByLetter(folders, files, searchQuery);
+  if (isGrouped && !groupLabel) {
+    const letterGroups = groupFoldersByLetter(folders, files, getSearchQuery());
 
-  Object.keys(letterGroups)
-    .sort()
-    .forEach((letter) => {
+    Object.keys(letterGroups).sort().forEach(letter => {
       const li = document.createElement("li");
       li.classList.add("folder");
       li.textContent = letter;
       li.onclick = () => {
         setLastClickedGroupLabel(letter);
-        renderVirtualGroup(letter, Array.from(letterGroups[letter]));
+        renderListView({
+          folders: [],
+          files: Array.from(letterGroups[letter]),
+          prefix,
+          isGrouped: false,
+          groupLabel: letter
+        });
       };
       ul.appendChild(li);
     });
 
-  const scrollContainer = document.createElement("div");
-  scrollContainer.id = "media-scroll";
-  scrollContainer.appendChild(ul);
-  mediaTree.appendChild(scrollContainer);
-}
+  } else {
+    const sortedFolders = sortItems(folders.map(f => f + "/"));
+    const sortedFiles = sortItems(files);
 
-export function renderVirtualGroup(letter, items) {
-  mediaTree.innerHTML = `<h4>Group: ${letter}</h4>`;
-  setLastClickedGroupLabel(letter);
-  
-  const ul = document.createElement("ul");
-  const prefix = getCurrentPath() ? getCurrentPath() + "/" : "";
-  const sortedItems = sortItems(items);
-
-  if (getCurrentPath() === "Music" || getCurrentPath().startsWith("Music/")) {
-    const index = sortedItems.findIndex(i => i.toLowerCase() === "playlists/");
-    if (index > -1) {
-      const [playlistItem] = sortedItems.splice(index, 1);
-      sortedItems.unshift(playlistItem);
-    }
-  }
-
-  for (const item of sortedItems) {
-    const li = document.createElement("li");
-
-    if (item.endsWith("/")) {
-      const folderName = item.slice(0, -1);
+    for (const folder of sortedFolders) {
+      const folderName = folder.slice(0, -1);
+      const li = document.createElement("li");
       li.classList.add("folder");
       li.textContent = folderName;
-      li.onclick = () => {
-        setLastClickedGroupLabel(folderName);
-        renderFolder(prefix + folderName);
-      };
-    } else if (item.toLowerCase().endsWith(".m3u")) {
-      li.classList.add("playlist-file");
-      li.textContent = item;
-      li.onclick = () => loadPlaylist(prefix + item.slice(0, -4));
-    } else if (item.toLowerCase().endsWith(".epub")) {
-      li.classList.add("file");
-      li.textContent = item;
-
-      const link = document.createElement("a");
-      const encodedPath = encodeURIComponent(prefix + item);
-      link.href = `/epubReader.html?file=${encodedPath}`;
-      link.textContent = "📘 Read Online";
-      link.style.marginLeft = "1rem";
-
-      li.appendChild(link);
-    } else {
-      li.classList.add("file");
-      li.textContent = item;
-      li.onclick = () => playMedia(prefix + item);
+      li.onclick = () => renderFolder(prefix + folderName);
+      ul.appendChild(li);
     }
 
-    ul.appendChild(li);
-  }
+    for (const file of sortedFiles) {
+      const li = document.createElement("li");
+      const fullPath = prefix + file;
 
-  const scrollContainer = document.createElement("div");
-  scrollContainer.id = "media-scroll";
-  scrollContainer.appendChild(ul);
-  mediaTree.appendChild(scrollContainer);
-}
+      if (file.toLowerCase().endsWith(".m3u")) {
+        li.classList.add("playlist-file");
+        li.textContent = file;
+        li.onclick = () => loadPlaylist(fullPath.slice(0, -4));
+      } else if (file.toLowerCase().endsWith(".epub")) {
+        li.classList.add("file");
+        li.textContent = file;
 
-function renderSimpleListView(folders, files, prefix) {
-  const ul = document.createElement("ul");
+        const link = document.createElement("a");
+        link.href = `/epubReader.html?file=${encodeURIComponent(fullPath)}`;
+        link.textContent = "📘 Read Online";
+        link.style.marginLeft = "1rem";
+        li.appendChild(link);
+      } else {
+        li.classList.add("file");
+        li.textContent = file;
+        li.onclick = () => playMedia(fullPath);
+      }
 
-  const sortedFolders = sortItems(folders.map((f) => f + "/"));
-  const sortedFiles = sortItems(files);
-
-  for (const folder of sortedFolders) {
-    const folderName = folder.slice(0, -1);
-    const li = document.createElement("li");
-    li.classList.add("folder");
-    li.textContent = folderName;
-    li.onclick = () => renderFolder(prefix + folderName);
-    ul.appendChild(li);
-  }
-
-  for (const file of sortedFiles) {
-    const li = document.createElement("li");
-
-    if (file.toLowerCase().endsWith(".m3u")) {
-      li.classList.add("playlist-file");
-      li.textContent = file;
-      li.onclick = () => loadPlaylist(prefix + file.slice(0, -4));
-    } else if (file.toLowerCase().endsWith(".epub")) {
-      li.classList.add("file");
-      li.textContent = file;
-
-      const link = document.createElement("a");
-      const encodedPath = encodeURIComponent(prefix + file);
-      link.href = `/epubReader.html?file=${encodedPath}`;
-      link.textContent = "📘 Read Online";
-      link.style.marginLeft = "1rem";
-
-      li.appendChild(link);
-    } else {
-      li.classList.add("file");
-      li.textContent = file;
-      li.onclick = () => playMedia(prefix + file);
+      ul.appendChild(li);
     }
-
-    ul.appendChild(li);
   }
 
   const scrollContainer = document.createElement("div");
