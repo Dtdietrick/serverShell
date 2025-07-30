@@ -10,6 +10,10 @@
 <body>
 
   <main class="container">
+    <p style="margin-bottom: 1rem;">
+      <a href="/index.html" class="contrast" role="button">⬅️ Back to Media Explorer</a>
+    </p>
+    
     <h2>Recently Viewed Items</h2>
     <ul id="recent-views"></ul>
 
@@ -17,6 +21,21 @@
     <ul id="rom-saves"></ul>
   </main>
 
+  <h2>Change Password</h2>
+  <form id="password-form">
+    <label for="currentPassword">Current Password</label>
+    <input type="password" id="currentPassword" name="currentPassword" required>
+
+    <label for="newPassword">New Password</label>
+    <input type="password" id="newPassword" name="newPassword" required>
+
+    <button type="submit">🔐 Update Password</button>
+    <p id="password-message" style="margin-top: 0.5rem;"></p>
+  </form>
+  
+  <div id="admin-panel" style="display: none;"></div>
+  <script src="/util/adminDashboard.js"></script>
+  
   <script>
     fetch('/user/dashboard')
       .then(res => res.json())
@@ -42,6 +61,24 @@
           });
         }
       });
+      
+      document.getElementById("password-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        
+        const currentPassword = document.getElementById("currentPassword").value;
+        const newPassword = document.getElementById("newPassword").value;
+        const msg = document.getElementById("password-message");
+
+        const res = await fetch("/user/password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+
+        const text = await res.text();
+        msg.textContent = text;
+        msg.style.color = res.ok ? "green" : "red";
+      }); 
   </script>
 
 </body>
