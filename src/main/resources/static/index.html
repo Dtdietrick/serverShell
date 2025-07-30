@@ -90,19 +90,13 @@
     import { logout } from '/ui/auth.js';
     window.logout = logout;
 
-    // Core explorer logic
+    // Core media logic
     import {
       playMedia,
       stopAllMedia,
       applyPlayerSettings
     } from '/media/media.js';
 
-    //virtual grouping
-    import { 
-        firstRender,
-        renderVirtualGroup 
-    } from '/explorer/explorer.js';
-    
     // Playlist logic
     import {
       initPlaylist,
@@ -114,8 +108,13 @@
       shufflePlaylist
     } from '/media/mediaPlaylist.js';
 
+    //virtual grouping
+    import {  firstRender } from '/explorer/explorer.js';
+    //eumulator
     import { launchEmulator } from '/emulator/emulator.js';
+    //menu button logic
     import { attachLauncherSpinnerEvents } from "/ui/onClick.js";
+    //user history media
     import { handleJumpParam } from '/media/mediaDashboard.js';
     
     Object.assign(window, {
@@ -123,7 +122,6 @@
       launchEmulator,
       //media
       firstRender,
-      renderVirtualGroup,
       playMedia,
       stopAllMedia,
       applyPlayerSettings,
