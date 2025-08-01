@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.file.*;
 import java.security.Principal;
@@ -61,10 +63,10 @@ public class EmulatorController {
             Files.createDirectories(savesPath);
 
     
-            int hostPort = findFreePort();
+            int hostPort  = findFreePortInRange(33000, 33100);
 
             List<String> cmd = List.of(
-            	    "docker", "run", "--rm", "-it",
+            	    "docker", "run", "--rm",
 
             	    // Mount config and save dirs
             	    "-v", configPath.toAbsolutePath() + ":/config",
@@ -87,7 +89,8 @@ public class EmulatorController {
             System.out.println("Launching emulator: " + String.join(" ", cmd));
             pb.start();
 
-            String vncUrl = "http://localhost:" + hostPort + "/vnc.html?autoconnect=true&resize=scale";
+            String serverIp = InetAddress.getLocalHost().getHostAddress();
+            String vncUrl = "http://"+serverIp+":" + hostPort + "/vnc.html?autoconnect=true&resize=scale";
             return ResponseEntity.ok(vncUrl);
         } catch (IOException e) {
             logger.error("❌ Emulator launch failed", e);
@@ -153,12 +156,20 @@ public class EmulatorController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(new org.springframework.core.io.PathResource(savePath));
     }
-    public int findFreePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            socket.setReuseAddress(true);
-            return socket.getLocalPort();
+    
+    public static int findFreePortInRange(int minPort, int maxPort) {
+        for (int port = minPort; port <= maxPort; port++) {
+            try (ServerSocket socket = new ServerSocket()) {
+                socket.setReuseAddress(true);
+                socket.bind(new InetSocketAddress("0.0.0.0", port));
+                return port;
+            } catch (IOException ignored) {
+                // Port is in use, try next
+            }
         }
+        throw new IllegalStateException("No available port in range " + minPort + "-" + maxPort);
     }
+    
     private void initializeUserRetroarchIfMissing(String username) throws IOException {
         Path userRoot = Paths.get(romSaveDir, "users", username);
         Path configPath = userRoot.resolve("config");
