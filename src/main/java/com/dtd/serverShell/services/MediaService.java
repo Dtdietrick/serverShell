@@ -113,7 +113,9 @@ public class MediaService {
             log.warn("Invalid media path: " + targetPath);
             return List.of();
         }
-
+        System.out.println("📂 [MediaScan] media.dir = " + mediaDir);
+        System.out.println("📂 [MediaScan] currentPath = " + currentPath);
+        System.out.println("📂 [MediaScan] Resolved targetPath = " + targetPath.toAbsolutePath());
         try (Stream<Path> stream = Files.walk(targetPath)) {
             List<String> items = stream
                 // Skip the root folder itself

@@ -27,6 +27,9 @@ public class EmulatorController {
     @Value("${rom.save.dir}")
     private String romSaveDir;
 
+    @Value("${pulse.dir}")
+    private String pulseDir;
+    
     private final Logger logger = LoggerFactory.getLogger(EmulatorController.class);
     private final AppUserRepository appUserRepository;
 
@@ -44,24 +47,41 @@ public class EmulatorController {
             }
 
             String username = principal.getName();
+            System.out.println("🧩 [RetroInit] ROM Save Dir Root: " + romSaveDir);
+            System.out.println("👤 [RetroInit] Username: " + username);
+            
             initializeUserRetroarchIfMissing(username);
-
             Path configPath = Paths.get(romSaveDir, "users", username, "config");
             Path savesPath = Paths.get(romSaveDir, "users", username, "saves"); 
 
+
+            System.out.println("📁 [RetroInit] Config path: " + configPath.toAbsolutePath());
+            System.out.println("📁 [RetroInit] Saves path: " + savesPath.toAbsolutePath());
             Files.createDirectories(configPath);
             Files.createDirectories(savesPath);
 
+    
             int hostPort = findFreePort();
-            List<String> cmd = List.of(
-                    "docker", "run", "--rm", "-it",
-                    "-v", configPath.toAbsolutePath() + ":/config", //mount /config/
-                    "-v", savesPath.toAbsolutePath() + ":/saves", // mount /saves/
-                    "-p", hostPort + ":52300",
-                    "retroarch-linux",
-                    rom
-                );
 
+            List<String> cmd = List.of(
+            	    "docker", "run", "--rm", "-it",
+
+            	    // Mount config and save dirs
+            	    "-v", configPath.toAbsolutePath() + ":/config",
+            	    "-v", savesPath.toAbsolutePath() + ":/saves",
+
+            	    // Mount PulseAudio socket from host
+            	    "--mount", "type=bind,source=" + pulseDir + ",target=/tmp/pulseaudio.socket",
+            	    "-e", "PULSE_SERVER=unix:/tmp/pulseaudio.socket",
+
+            	    // VNC port
+            	    "-p", hostPort + ":52300",
+
+            	    // Image + ROM
+            	    "retroarch-linux",
+            	    rom
+            	);
+            
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.inheritIO();
             System.out.println("Launching emulator: " + String.join(" ", cmd));

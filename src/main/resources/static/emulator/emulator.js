@@ -18,7 +18,7 @@ export function launchEmulator(rom, button) {
         // Reset UI
         win.location.href = url;
         button.textContent = originalText;
-      }, 2500);
+      }, 3000);
     })
     .catch((err) => {
       win.close();

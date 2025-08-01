@@ -126,17 +126,19 @@ WantedBy=multi-user.target
 - [✅] beautify UI - part 2 (v1.0.0.1)
 - [✅] back button overhaul (v1.0.0.1)
 - [✅] js and css refactor (v1.0.0.1)
-- [ ] dashboard history jumps to media
+- [✅] dashboard history jumps to media (v1.0.0.2)
+- [✅] split file and path js (v1.0.0.2)
+- [✅] user self service portal (v1.0.0.2)
+- [✅] gba audio fix(v1.0.0.3)
+- [✅] copy protect(v1.0.0.3)
+- [ ] gba custom controls
 - [ ] no more ghost folders
-- [ ] only render allowed media
-- [ ] split file and path js
-- [ ] Better GameBoy Controls
 - [ ] User favorite playlist
+- [ ] add polling logic to container
 - [ ] view toggle
 - [ ] eupub user controls
 - [ ] Show some onscreen error if there was a problem with media playback
 - [ ] logup service 
-- [ ] user self service portal (user login stats, recent views, and change password)
 - [ ] split out services into microservices
 - [ ] user media request service
 - [ ] N64 Emulator functionality
