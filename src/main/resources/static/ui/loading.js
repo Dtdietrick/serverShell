@@ -1,6 +1,5 @@
 //File:loading.js
 let isLoading = false; 
-let isBackBtn = false;
 
 export function getIsLoading() { return isLoading; }
 export function setIsLoading(bool) { isLoading = bool; }
@@ -23,11 +22,8 @@ export function toggleMediaButtons(show) {
   });
 }
 
-export function getShowBackButton() { return isBackBtn; }
-export function setShowBackButton(show) { 
-    const backButton = document.querySelector(".back-btn");
-    
-    show ? backButton.classList.remove("disabled") : backButton.classList.add("disabled");
-    
-    isBackBtn = show; 
+export function disableBackButton(disable) { 
+  const backButton = document.querySelector(".back-btn");
+  console.log("disable back button?: ", disable);
+  disable ? backButton.classList.add("disabled") : backButton.classList.remove("disabled");
 }

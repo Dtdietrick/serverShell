@@ -1,12 +1,23 @@
-button.disabled {
+button.disabled,
+.back-btn.disabled {
   opacity: 0.5;
   pointer-events: none;
   cursor: not-allowed;
 }
 
-.back-button {
+.back-btn {
   margin-bottom: 1rem;
+  padding: 0.5rem 1rem;
+  background-color: #222;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 0.4rem;
+  font-weight: bold;
   cursor: pointer;
-  color: blue;
-  text-decoration: underline;
+  display: none;
+  transition: background-color 0.2s ease;
+}
+
+.back-btn:hover:not(.disabled) {
+  background-color: #333;
 }

@@ -121,4 +121,9 @@ public class MediaController {
         userProfileService.recordView(username, path);
         return mediaService.getMedia(path, rangeHeader, fromPlaylist);
     }
+    
+    @GetMapping("/allowedMedia")
+    public List<String> getSupportedExtensions() {
+        return allowedMediaType.SUPPORTED_EXTENSIONS;
+    }
 }

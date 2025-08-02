@@ -57,8 +57,8 @@ public class EmulatorController {
             Path savesPath = Paths.get(romSaveDir, "users", username, "saves"); 
 
 
-            System.out.println("📁 [RetroInit] Config path: " + configPath.toAbsolutePath());
-            System.out.println("📁 [RetroInit] Saves path: " + savesPath.toAbsolutePath());
+            System.out.println("[RetroInit] Config path: " + configPath.toAbsolutePath());
+            System.out.println("[RetroInit] Saves path: " + savesPath.toAbsolutePath());
             Files.createDirectories(configPath);
             Files.createDirectories(savesPath);
 

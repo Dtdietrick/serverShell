@@ -2,8 +2,6 @@
 
 //state logic
 import {
-  getCurrentPath,
-  setCurrentPath,
   getLastClickedGroupLabel,
   setLastClickedGroupLabel,
 } from '/explorer/path.js';

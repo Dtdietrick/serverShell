@@ -7,16 +7,15 @@ import {
 } from "/explorer/history.js";
 
 import {
-  getCurrentPath,
-  setCurrentPath,
   getLastClickedGroupLabel,
   setLastClickedGroupLabel,
-  getMediaRoot
+  getMediaRoot,
+  getCurrentPath,
+  setCurrentPath
 } from "/explorer/path.js";
 
 import { 
-    getShowBackButton, 
-    setShowBackButton
+    disableBackButton
 } from "/ui/loading.js";
 
 import { renderFolder } from "/explorer/explorer.js";
@@ -24,40 +23,46 @@ import { renderFolder } from "/explorer/explorer.js";
 // Back button navigates up one folder and fetches new data
 const backButton = document.querySelector(".back-btn");
 backButton.onclick = () => {
-  const current = getCurrentPath();
   const root = getMediaRoot();
-
-  if (!current || current === root) return;
-
   const prev = popHistory();
-  console.log("Back to:", prev);
 
-  if (prev === root) {
-    setLastClickedGroupLabel("");
-  }
+  if (!prev) return;
 
-  setCurrentPath(prev);
-  renderFolder(prev);
-};
-//console.log("peekHistory:", peekHistory());
-//console.log("pathHistory:", getPathHistory());
+    const current = getCurrentPath();
+    setLastClickedGroupLabel(""); // clear group label on back
+    setCurrentPath(prev); // real path going back to
+    // If current was inside a virtual group, we were in a grouped view
+    const wasInVirtual = current === prev;
+
+    if (wasInVirtual && prev === root) {
+      console.log("Back from virtual group to grouped root:", prev);
+      renderFolder(prev, true);
+    } else {
+      console.log("Back to:", prev);
+      renderFolder(prev, prev === root);
+    }
+  };
+
+// Update visibility and audit history
 export function updateBackButton(path) {
-  const show = getShowBackButton();
   const root = getMediaRoot();
   const prev = peekHistory();
-  console.log(`before update: ${path}`);
   const atRoot = path === root;
-
-  // skip if history is not yet initialized
-  if (!prev) return;
   
-  // update button UI
-  setShowBackButton(!atRoot);
-
-  // push to path history ONLY if it's a new path
+  // disable back if we're at root
+  disableBackButton(atRoot);
+  
+  if (!prev) return; // history uninitialized
+ 
+  // Push path to history if it's a new navigable path
   if (!atRoot && path !== prev) {
     pushHistory(path);
   }
-  
-  console.log(`after update: ${path}`);
-};
+
+  console.log(`Back button state updated — path: ${path}, root: ${root}`);
+}
+
+export function showBackButton(){
+    const backButton = document.querySelector(".back-btn");
+    backButton.style.display = 'block';
+}

@@ -131,8 +131,9 @@ WantedBy=multi-user.target
 - [✅] user self service portal (v1.0.0.2)
 - [✅] gba audio fix(v1.0.0.3)
 - [✅] copy protect(v1.0.0.3)
+- [✅] no more ghost folders(v1.0.0.4)
+- [ ] ESLint/Checkstyle
 - [ ] gba custom controls
-- [ ] no more ghost folders
 - [ ] User favorite playlist
 - [ ] add polling logic to container
 - [ ] view toggle

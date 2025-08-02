@@ -116,7 +116,7 @@ public class MediaService {
         System.out.println("📂 [MediaScan] media.dir = " + mediaDir);
         System.out.println("📂 [MediaScan] currentPath = " + currentPath);
         System.out.println("📂 [MediaScan] Resolved targetPath = " + targetPath.toAbsolutePath());
-        try (Stream<Path> stream = Files.walk(targetPath)) {
+        try (Stream<Path> stream = Files.list(targetPath)) {
             List<String> items = stream
                 // Skip the root folder itself
                 .filter(p -> !p.equals(targetPath))

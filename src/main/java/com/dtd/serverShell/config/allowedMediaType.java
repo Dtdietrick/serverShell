@@ -1,4 +1,6 @@
 package com.dtd.serverShell.config;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 // Determine MediaType from filename extension for proper HTTP Content-Type header
@@ -9,6 +11,11 @@ import org.springframework.stereotype.Service;
 public class allowedMediaType{
 	private static final Logger log = LoggerFactory.getLogger(allowedMediaType.class);
 	
+    public static final List<String> SUPPORTED_EXTENSIONS = List.of(
+            ".mp3", ".mp4", ".mkv", ".webm",".m3u", ".epub"
+        );
+
+    
 	public static MediaType getMediaType(String filename) {
         String lower = filename.toLowerCase();
 
@@ -33,10 +40,6 @@ public class allowedMediaType{
     public static boolean isSupportedMediaFile(String name) {
         String lower = name.toLowerCase();
         String extension = lower.substring(lower.lastIndexOf('.'));
-        
-        return extension.endsWith(".mp3") || extension.endsWith(".mp4") || extension.endsWith(".wav")
-            || extension.endsWith(".avi") || extension.endsWith(".mkv") || extension.endsWith(".webm")
-            || extension.endsWith(".ogg") || extension.endsWith(".flac") || extension.endsWith(".m3u")
-            || extension.endsWith(".epub"); 
+        return SUPPORTED_EXTENSIONS.contains(extension);
     }
 }
