@@ -11,11 +11,13 @@ import {
     setFileList
 } from '/explorer/file.js';
 
+import { loadMedia } from '/util/player.js';
 // DOM references
 const player = document.getElementById("viewer-player");
 const playlistPopup = document.getElementById("playlist-popup");
 const popupPlayer = document.getElementById("popup-player");
 const playlistItems = document.getElementById("playlist-items");
+let plyrInstance = null;
 
 /**
  * Plays a media file (audio/video) in either main player or popup.
@@ -29,27 +31,16 @@ export function playMedia(filename, usePopup = false, fromPlaylist = false) {
   const ext = filename.split(".").pop().toLowerCase();
   const encodedPath = encodeURIComponent(filename).replace(/%2F/g, "/");
   const src = `/media/api/stream/${encodedPath}${fromPlaylist ? "?fromPlaylist=true" : ""}`;
-
-  // Determine media type for source element
-  const type = ext === "mp3" ? "mpeg" : ext;
+  const type = ext === "mp3" ? "audio/mpeg" : `video/${ext}`;
   const isVideo = ["mp4", "webm", "ogg"].includes(ext);
-  
-  // Remove extension for display
-  const displayName = filename.split("/").pop().replace(/\.[^/.]+$/, ""); 
 
-  const header = `<div style="font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem;">🎵 ${displayName}</div>`;
-  const baseAttrs = `controls autoplay controlsList="nodownload" oncontextmenu="return false"`;
+  const displayName = filename.split("/").pop().replace(/\.[^/.]+$/, "");
+  const header = `<div style="font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem;">${isVideo ? "📺" : "🎵"} ${displayName}</div>`;
 
-  const mediaHTML = isVideo
-    ? `<video ${baseAttrs}><source src="${src}" type="video/${ext}">Video not supported.</video>`
-    : `<audio ${baseAttrs}><source src="${src}" type="audio/${type}">Audio not supported.</audio>`;
-    
-  // Choose target container
   const target = usePopup ? popupPlayer : player;
-  target.innerHTML = `${header}${mediaHTML}`;
+  target.innerHTML = header;
 
-  // Apply volume/mute settings persistence
-  const mediaElement = target.querySelector("audio, video");
+  const mediaElement = loadMedia(target, src, type, isVideo);
   if (mediaElement) applyPlayerSettings(mediaElement);
 }
 

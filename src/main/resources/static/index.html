@@ -19,6 +19,9 @@
   <link rel="stylesheet" href="/css/components/spinner.css">
   <!-- 404 fav icon -->
   <link rel="icon" href="data:,">
+  <!-- Media player -->
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+
 </head>
 <body>
     <!-- Top nav -->
@@ -58,13 +61,13 @@
       <div id="mediaTree">Select A Media Type First...</div>
       
       <!-- New media viewer -->
-      <div id="media-viewer">
-        <div class="viewer-content" id="viewer-player">
-          <h3>📺 Viewer</h3>
-          <p>No media selected yet.</p>
-        </div>
+      <div class="media-viewer" id="viewer-player">
+        <h3>📺 Viewer</h3>
+        <video id="media-player" controls crossorigin playsinline>
+          <source src="" type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
       </div>
-    </div>
 
     <!-- Spinner -->
     <div id="loading-spinner">⏳ Loading ...</div>
@@ -97,17 +100,6 @@
       applyPlayerSettings
     } from '/media/media.js';
 
-    // Playlist logic
-    import {
-      initPlaylist,
-      setPlayMediaCallback,
-      loadPlaylist,
-      nextInPlaylist,
-      prevInPlaylist,
-      closePlaylist,
-      shufflePlaylist
-    } from '/media/mediaPlaylist.js';
-
     //virtual grouping
     import {  firstRender } from '/explorer/explorer.js';
     //eumulator
@@ -116,6 +108,8 @@
     import { attachLauncherSpinnerEvents } from "/ui/onClick.js";
     //user history media
     import { handleJumpParam } from '/media/mediaDashboard.js';
+    //media player
+    import { loadMedia } from '/util/player.js';
     
     Object.assign(window, {
       logout,
@@ -125,24 +119,13 @@
       playMedia,
       stopAllMedia,
       applyPlayerSettings,
-      //playlists
-      loadPlaylist,
-      nextInPlaylist,
-      prevInPlaylist,
-      closePlaylist,
-      shufflePlaylist
     });
-    
-    // Wire up playlist → player interaction
-    setPlayMediaCallback(playMedia);
-    //emulator
-    initPlaylist();
+    ;
     //dashboard media
     handleJumpParam();
     window.addEventListener("DOMContentLoaded", () => {
       attachLauncherSpinnerEvents();
     });
   </script>
-  
 </body>
 </html>

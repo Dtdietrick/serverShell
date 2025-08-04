@@ -1,6 +1,6 @@
 /* FILE: mediaViewer.css */
 
-#media-viewer {
+#viewer-player {
   flex: 1;
   padding: 1rem;
   background: #fff;
@@ -14,8 +14,8 @@
   flex-direction: column;
   justify-content: flex-start;
 }
-#media-viewer video,
-#media-viewer audio {
+#viewer-player video,
+#viewer-player audio {
   flex-shrink: 1;
   flex-grow: 1;
   max-height: 100%;
@@ -25,8 +25,8 @@
   padding: 0;        
   box-sizing: border-box;
 }
-#media-viewer audio,
-#media-viewer video {
+#viewer-player audio,
+#viewer-player video {
   width: 100%;
   margin-top: 1rem;
   max-height: 100%;
