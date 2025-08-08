@@ -11,7 +11,6 @@ import {
     setFileList
 } from '/explorer/file.js';
 
-import { loadMedia } from '/util/player.js';
 // DOM references
 const player = document.getElementById("viewer-player");
 const playlistPopup = document.getElementById("playlist-popup");
@@ -22,49 +21,81 @@ let plyrInstance = null;
 /**
  * Plays a media file (audio/video) in either main player or popup.
  * @param {string} filename - Full file path
- * @param {boolean} usePopup - Play in popup if true
- * @param {boolean} fromPlaylist - If playing from playlist (adds query param)
  */
-export function playMedia(filename, usePopup = false, fromPlaylist = false) {
-  stopAllMedia();
+export async function playMedia(filename) {
+  if (!filename || typeof filename !== "string") {
+    console.warn("playMedia called with invalid filename");
+    return;
+  }
 
-  const ext = filename.split(".").pop().toLowerCase();
-  const encodedPath = encodeURIComponent(filename).replace(/%2F/g, "/");
-  const src = `/media/api/stream/${encodedPath}${fromPlaylist ? "?fromPlaylist=true" : ""}`;
-  const type = ext === "mp3" ? "audio/mpeg" : `video/${ext}`;
-  const isVideo = ["mp4", "webm", "ogg"].includes(ext);
+  const sessionId = sessionStorage.getItem("vlcSessionId");
+  if (!sessionId) {
+    console.error("No VLC session preloaded");
+    return;
+  }
 
-  const displayName = filename.split("/").pop().replace(/\.[^/.]+$/, "");
-  const header = `<div style="font-weight: bold; font-size: 1.1rem; margin-bottom: 0.5rem;">${isVideo ? "📺" : "🎵"} ${displayName}</div>`;
+  try {
+    const res = await fetch("/vlc/play", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename })
+    });
 
-  const target = usePopup ? popupPlayer : player;
-  target.innerHTML = header;
+    const responseText = await res.text();
+    if (!res.ok) throw new Error(responseText);
 
-  const mediaElement = loadMedia(target, src, type, isVideo);
-  if (mediaElement) applyPlayerSettings(mediaElement);
+    console.log("[VLC] File sent to active container");
+
+  } catch (err) {
+    console.error("Failed to play media in VLC container:", err);
+    const mediaContainer = document.getElementById("media-container");
+    if (mediaContainer) {
+      mediaContainer.innerHTML = `<div style="color: red;">Failed to play ${filename}</div>`;
+    }
+  }
 }
-
 /**
  * Stop and clear any playing media from both main player and popup.
  */
 export function stopAllMedia() {
-  const mainMedia = player.querySelector("audio, video");
+  const mainMedia = player.querySelector("audio, video, iframe");
   if (mainMedia) {
-    mainMedia.pause();
-    mainMedia.src = "";
-    mainMedia.load();
+    if (mainMedia.tagName === "VIDEO" || mainMedia.tagName === "AUDIO") {
+      mainMedia.pause();
+      mainMedia.src = "";
+      mainMedia.load();
+    }
   }
   player.innerHTML = "";
 
-  const popupMedia = popupPlayer.querySelector("audio, video");
+  const popupMedia = popupPlayer.querySelector("audio, video, iframe");
   if (popupMedia) {
-    popupMedia.pause();
-    popupMedia.src = "";
-    popupMedia.load();
+    if (popupMedia.tagName === "VIDEO" || popupMedia.tagName === "AUDIO") {
+      popupMedia.pause();
+      popupMedia.src = "";
+      popupMedia.load();
+    }
   }
   popupPlayer.innerHTML = "";
-}
 
+  const viewerContainer = document.getElementById("viewer-player");
+  if (viewerContainer) {
+    viewerContainer.innerHTML = "<h3> Viewer</h3>";
+  }
+}
+async function waitForVncReady(sessionId) {
+  const url = `/proxy/vnc/${sessionId}/vnc.html`;
+  for (let i = 0; i < 10; i++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return true;
+    } catch (e) {
+      console.log(`[VNC] not ready yet (${i + 1})`);
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return false;
+}
 /**
  * Apply volume and mute settings from localStorage to media element,
  * and save changes persistently.

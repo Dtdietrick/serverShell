@@ -19,8 +19,6 @@
   <link rel="stylesheet" href="/css/components/spinner.css">
   <!-- 404 fav icon -->
   <link rel="icon" href="data:,">
-  <!-- Media player -->
-  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
 
 </head>
 <body>
@@ -63,42 +61,17 @@
       <!-- New media viewer -->
       <div class="media-viewer" id="viewer-player">
         <h3>📺 Viewer</h3>
-        <video id="media-player" controls crossorigin playsinline>
-          <source src="" type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
+        <div id="media-container"></div>
       </div>
 
     <!-- Spinner -->
     <div id="loading-spinner">⏳ Loading ...</div>
-
-    <!-- Playlist Popup (unchanged) -->
-    <div id="playlist-popup">
-      <span class="close-btn" onclick="closePlaylist()">✖</span>
-      <h3>🎵 Playlist</h3>
-      <ul id="playlist-items"></ul>
-
-      <div id="playlist-controls" style="margin: 1rem 0; text-align: center;">
-        <button onclick="prevInPlaylist()">⏮ Prev</button>
-        <button onclick="nextInPlaylist()">⏭ Next</button>
-        <button id="shuffle-button" onclick="shufflePlaylist()">🔀 Shuffle</button>
-      </div>
-
-      <div id="popup-player"></div>
-    </div>
 
   <!-- Main logic pulled in as ES modules -->
   <script type="module">
     // Auth (logout)
     import { logout } from '/ui/auth.js';
     window.logout = logout;
-
-    // Core media logic
-    import {
-      playMedia,
-      stopAllMedia,
-      applyPlayerSettings
-    } from '/media/media.js';
 
     //virtual grouping
     import {  firstRender } from '/explorer/explorer.js';
@@ -108,17 +81,12 @@
     import { attachLauncherSpinnerEvents } from "/ui/onClick.js";
     //user history media
     import { handleJumpParam } from '/media/mediaDashboard.js';
-    //media player
-    import { loadMedia } from '/util/player.js';
     
     Object.assign(window, {
       logout,
       launchEmulator,
       //media
       firstRender,
-      playMedia,
-      stopAllMedia,
-      applyPlayerSettings,
     });
     ;
     //dashboard media

@@ -2,7 +2,10 @@ package com.dtd.serverShell.controller;
 
 import com.dtd.serverShell.config.RomRegistry;
 import com.dtd.serverShell.model.AppUser;
+import com.dtd.serverShell.controller.AdminController;
 import com.dtd.serverShell.repository.AppUserRepository;
+import com.dtd.serverShell.util.ServerUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +35,7 @@ public class EmulatorController {
     @Value("${pulse.dir}")
     private String pulseDir;
     
+
     private final Logger logger = LoggerFactory.getLogger(EmulatorController.class);
     private final AppUserRepository appUserRepository;
 
@@ -49,21 +53,16 @@ public class EmulatorController {
             }
 
             String username = principal.getName();
-            System.out.println("🧩 [RetroInit] ROM Save Dir Root: " + romSaveDir);
-            System.out.println("👤 [RetroInit] Username: " + username);
-            
+
             initializeUserRetroarchIfMissing(username);
             Path configPath = Paths.get(romSaveDir, "users", username, "config");
             Path savesPath = Paths.get(romSaveDir, "users", username, "saves"); 
 
-
-            System.out.println("[RetroInit] Config path: " + configPath.toAbsolutePath());
-            System.out.println("[RetroInit] Saves path: " + savesPath.toAbsolutePath());
             Files.createDirectories(configPath);
             Files.createDirectories(savesPath);
 
     
-            int hostPort  = findFreePortInRange(33000, 33100);
+            int hostPort  = ServerUtil.findFreePortInRange(33000, 33199);
 
             List<String> cmd = List.of(
             	    "docker", "run", "--rm",
@@ -89,9 +88,10 @@ public class EmulatorController {
             System.out.println("Launching emulator: " + String.join(" ", cmd));
             pb.start();
 
-            String serverIp = InetAddress.getLocalHost().getHostAddress();
-            String vncUrl = "http://"+serverIp+":" + hostPort + "/vnc.html?autoconnect=true&resize=scale";
-            return ResponseEntity.ok(vncUrl);
+            String fullUrl = "http://"+ServerUtil.getServerHost()+":" + hostPort + "/vnc.html?autoconnect=true&resize=scale";
+
+            
+            return ResponseEntity.ok(fullUrl);
         } catch (IOException e) {
             logger.error("❌ Emulator launch failed", e);
             return ResponseEntity.status(500).body("Failed to launch emulator: " + e.getMessage());
@@ -157,19 +157,7 @@ public class EmulatorController {
                 .body(new org.springframework.core.io.PathResource(savePath));
     }
     
-    public static int findFreePortInRange(int minPort, int maxPort) {
-        for (int port = minPort; port <= maxPort; port++) {
-            try (ServerSocket socket = new ServerSocket()) {
-                socket.setReuseAddress(true);
-                socket.bind(new InetSocketAddress("0.0.0.0", port));
-                return port;
-            } catch (IOException ignored) {
-                // Port is in use, try next
-            }
-        }
-        throw new IllegalStateException("No available port in range " + minPort + "-" + maxPort);
-    }
-    
+
     private void initializeUserRetroarchIfMissing(String username) throws IOException {
         Path userRoot = Paths.get(romSaveDir, "users", username);
         Path configPath = userRoot.resolve("config");

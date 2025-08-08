@@ -1,16 +1,27 @@
 //FILE:MediaController.java
 package com.dtd.serverShell.controller;
 
+import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.URI;
+import java.net.URL;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Scanner;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,14 +34,20 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.dtd.serverShell.config.allowedMediaType;
+import com.dtd.serverShell.proxy.VlcSessionManager;
+import com.dtd.serverShell.proxy.VlcSessionManager.VlcSession;
 import com.dtd.serverShell.services.MediaService;
 import com.dtd.serverShell.services.UserProfileService;
+import com.dtd.serverShell.util.ServerUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -38,15 +55,16 @@ import jakarta.servlet.http.HttpServletRequest;
 @RequestMapping("/media/api")
 public class MediaController {
 	
-	
     @Value("${media.dir}")
     private String mediaDir;
-    
+   
+    @Value("${pulse.dir}")
+    private String pulseDir;
+        
 	private static final Logger log = LoggerFactory.getLogger(MediaController.class);
 	private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.serverShell.audit");
     private final MediaService mediaService;
     private final allowedMediaType allowedmediaType;
-    private final AntPathMatcher pathMatcher = new AntPathMatcher(); // Used for pattern matching URI paths
     private final UserProfileService userProfileService;
     
     public MediaController(MediaService mediaService, UserProfileService userProfileService, allowedMediaType allowedmediaType) {
@@ -70,7 +88,6 @@ public class MediaController {
         // Endpoint to list all playlists available; returns list from MediaService
         return ResponseEntity.ok(mediaService.listPlaylists());
     }
-
     
     @GetMapping("/playlist")
     public ResponseEntity<List<String>> getPlaylist(
@@ -82,48 +99,18 @@ public class MediaController {
         return ResponseEntity.ok(mediaService.loadPlaylist(name, offset, limit));
     }
 
-    @GetMapping("/stream/**")
-    public ResponseEntity<Resource> getMedia(
-            HttpServletRequest request,
-            @RequestHeader(value = "Range", required = false) String rangeHeader,
-            @RequestParam(value = "fromPlaylist", required = false) Boolean fromPlaylist) throws IOException {
-
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String username = auth != null ? auth.getName() : "anonymous";
-
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null) ip = request.getRemoteAddr();
-
-        String userAgent = request.getHeader("User-Agent");
-        String requestedPath = request.getRequestURI();
-
-        log.info("MEDIA ACCESS: user={}, path={}, ip={}, agent={}", username, requestedPath, ip, userAgent);
-        auditLog.info("MEDIA ACCESS: user={}, path={}, ip={}, agent={}", username, requestedPath, ip, userAgent);
-
-        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
-            log.warn("Unauthorized media access attempt for path: {}", requestedPath);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        // Extract media path after /media/api/stream/
-        String pattern = "/media/api/stream/**";
-        String encodedPath = pathMatcher.extractPathWithinPattern(pattern, requestedPath);
-        String path = URLDecoder.decode(encodedPath, StandardCharsets.UTF_8);
-
-        Path mediaRoot = Paths.get(mediaDir).normalize();
-        Path requestedFile = mediaRoot.resolve(path).normalize();
-
-        if (!requestedFile.startsWith(mediaRoot) || !Files.exists(requestedFile)) {
-            log.warn("Invalid or missing media file request: {}", requestedFile);
-            return ResponseEntity.notFound().build();
-        }
-
-        userProfileService.recordView(username, path);
-        return mediaService.getMedia(path, rangeHeader, fromPlaylist);
-    }
-    
     @GetMapping("/allowedMedia")
     public List<String> getSupportedExtensions() {
         return allowedMediaType.SUPPORTED_EXTENSIONS;
+    }
+    
+    private String stripExtension(String filename) {
+        int idx = filename.lastIndexOf('.');
+        return (idx > 0) ? filename.substring(0, idx) : filename;
+    }
+
+    private String getFileExtension(String filename) {
+        int idx = filename.lastIndexOf('.');
+        return (idx > 0 && idx < filename.length() - 1) ? filename.substring(idx + 1) : "";
     }
 }

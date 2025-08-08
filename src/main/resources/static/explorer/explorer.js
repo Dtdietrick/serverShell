@@ -47,7 +47,10 @@ export async function firstRender(path) {
   setCurrentPath(path);
   toggleMediaButtons(false);
   showBackButton();
+  
   await getAllowedMediaList();
+  await preloadVlcIframe();
+  
   renderFolder(path, true); // Root level gets grouped A-Z view
 }
 
@@ -214,8 +217,10 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
       li.appendChild(link);
     } else {
           const fullPath = filePath.startsWith(prefix) ? filePath : prefix + filePath;
-          setCurrentPath(fullPath); 
-          li.onclick = () => playMedia(fullPath)
+          li.onclick = () => {
+            setCurrentPath(fullPath);
+            playMedia(fullPath);
+          };
     }
 
     ul.appendChild(li);
@@ -270,4 +275,36 @@ function getAllowedMediaList() {
     .catch((err) => {
       console.error("Failed to fetch supported media extensions:", err);
     });
+}
+
+export async function preloadVlcIframe() {
+  try {
+    const res = await fetch("/vlc/preload", { method: "POST" });
+    const sessionId = await res.text();
+
+    sessionStorage.setItem("vlcSessionId", sessionId);
+    console.log("[VLC] Preloaded session:", sessionId);
+
+    const iframeUrl = `/proxy/vnc/${sessionId}/vnc.html?autoconnect=true`;
+
+    const mediaContainer = document.getElementById("media-container");
+    if (!mediaContainer) return;
+
+    // Only insert if nothing exists yet
+    if (!mediaContainer.querySelector("iframe")) {
+      const iframe = document.createElement("iframe");
+      iframe.width = "100%";
+      iframe.height = "480";
+      iframe.allowFullscreen = true;
+      iframe.style.border = "none";
+      iframe.style.background = "#000";
+      iframe.src = iframeUrl;
+
+      mediaContainer.innerHTML = ""; // clear anything else
+      mediaContainer.appendChild(iframe);
+    }
+
+  } catch (e) {
+    console.error("VLC preload failed", e);
+  }
 }
