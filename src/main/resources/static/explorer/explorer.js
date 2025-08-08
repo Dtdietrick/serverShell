@@ -285,12 +285,11 @@ export async function preloadVlcIframe() {
     sessionStorage.setItem("vlcSessionId", sessionId);
     console.log("[VLC] Preloaded session:", sessionId);
 
-    const iframeUrl = `/proxy/vnc/${sessionId}/vnc.html?autoconnect=true`;
+    const iframeUrl = `/proxy/vlc/${sessionId}/`; // serves the raw VLC web UI
 
     const mediaContainer = document.getElementById("media-container");
     if (!mediaContainer) return;
 
-    // Only insert if nothing exists yet
     if (!mediaContainer.querySelector("iframe")) {
       const iframe = document.createElement("iframe");
       iframe.width = "100%";
@@ -300,7 +299,7 @@ export async function preloadVlcIframe() {
       iframe.style.background = "#000";
       iframe.src = iframeUrl;
 
-      mediaContainer.innerHTML = ""; // clear anything else
+      mediaContainer.innerHTML = "";
       mediaContainer.appendChild(iframe);
     }
 

@@ -10,26 +10,19 @@ public class VlcSessionManager {
     private static final Map<String, VlcSession> sessionMap = new ConcurrentHashMap<>();
     // Internal data structure to hold port mappings per session
     public static class VlcSession {
-        private final int websockifyPort;
         private final int httpVlcPort;
-        private final int vncPort;
-
-        
-        public VlcSession(int websockifyPort, int httpVlcPort, int vncPort) {
-            this.websockifyPort = websockifyPort;
+       
+        public VlcSession(int httpVlcPort) {
             this.httpVlcPort = httpVlcPort;
-            this.vncPort = vncPort;
         }
-
-        public int getWebsockifyPort() { return websockifyPort; }
+        
         public int getHttpVlcPort() { return httpVlcPort; }
-        public int getVncPort() { return vncPort; }
     }
 
     // Create and store a new session, return session ID
-    public static String registerSession(int websockifyPort, int httpVlcPort, int vncPort) {
+    public static String registerSession( int httpVlcPort) {
         String sessionId = UUID.randomUUID().toString();
-        sessionMap.put(sessionId, new VlcSession(websockifyPort, httpVlcPort, vncPort));
+        sessionMap.put(sessionId, new VlcSession(httpVlcPort));
         activeSessionId = sessionId;
         return sessionId;
     }
@@ -47,12 +40,11 @@ public class VlcSessionManager {
         return sessionMap.containsKey(sessionId);
     }
     
-	public static int getWebsockifyPort(String sessionId) {
-	    VlcSession session = getSession(sessionId);
-	    if (session == null) throw new IllegalArgumentException("Invalid session ID: " + sessionId);
-	    return session.getWebsockifyPort();
-	}
-	
+    public static int getHttpVlcPort(String sessionId) {
+        VlcSession session = sessionMap.get(sessionId);
+        return (session != null) ? session.getHttpVlcPort() : -1;
+    }
+    
 	public static VlcSession getActiveSession() {
 	    return activeSessionId != null ? sessionMap.get(activeSessionId) : null;
 	}

@@ -33,21 +33,16 @@ public class VlcController {
     @Value("${media.dir}")
     private String mediaDir;
 	
-	@PostMapping("/preload")
+    @PostMapping("/preload")
     public ResponseEntity<String> preloadVlcSession() {
-        int basePort = ServerUtil.findFreePortInRange(33200, 33600 - 3);
-        int websockifyPort = basePort;
-        int httpVlcPort = basePort + 1;
-        int vncPort = basePort + 2;
+        int httpVlcPort = ServerUtil.findFreePortInRange(33200, 33600);
 
-        System.out.printf("[VLC-PRELOAD] Preloading ports: %d/%d/%d%n", websockifyPort, httpVlcPort, vncPort);
+        System.out.printf("[VLC-PRELOAD] Preloading VLC on port: %d%n", httpVlcPort);
 
         try {
             List<String> cmd = List.of(
                 "bash", "/opt/serverShell/scripts/preload.sh",
-                String.valueOf(websockifyPort),
-                String.valueOf(httpVlcPort),
-                String.valueOf(vncPort)
+                String.valueOf(httpVlcPort) // Only pass HTTP port
             );
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -58,19 +53,19 @@ public class VlcController {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        System.out.println("[PRELOAD-CONTAINER] " + line);
+                        System.out.println("[PRELOAD] " + line);
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }).start();
 
-            boolean ready = ServerUtil.waitForPort("localhost", websockifyPort, 5000);
+            boolean ready = ServerUtil.waitForPort("localhost", httpVlcPort, 5000);
             if (!ready) {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Preload timeout");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("VLC preload timeout");
             }
 
-            String sessionId = VlcSessionManager.registerSession(websockifyPort, httpVlcPort, vncPort);
+            String sessionId = VlcSessionManager.registerSession( httpVlcPort); // No VNC/Websockify ports
             return ResponseEntity.ok(sessionId);
 
         } catch (Exception e) {
@@ -98,23 +93,23 @@ public class VlcController {
         }
 
         int vlcPort = session.getHttpVlcPort();
-        String inputPath = resolvedPath.toString();
+        String inputPath = resolvedPath.toAbsolutePath().toString();
 
         try {
-            // VLC requires file:// URI
+            // Construct media URI with proper escaping for VLC
             String mediaUri = "file://" + inputPath.replace(" ", "%20");
 
-            // Optional subtitle detection
+            // Optional subtitle (e.g. .srt)
+            String subtitleParam = "";
             Path subtitlePath = resolvedPath.resolveSibling(
                 resolvedPath.getFileName().toString().replaceFirst("\\.[^.]+$", ".srt")
             );
-            String subtitleParam = "";
-
             if (Files.exists(subtitlePath)) {
                 String subtitleUri = "file://" + subtitlePath.toString().replace(" ", "%20");
-                subtitleParam = "&input-slave=" + subtitleUri;
+                subtitleParam = "&input-slave=" + URLEncoder.encode(subtitleUri, StandardCharsets.UTF_8);
             }
 
+            // Don't double encode the input path — VLC expects raw file URI encoding
             String targetUrl = String.format(
                 "http://localhost:%d/requests/status.xml?command=in_play&input=%s%s",
                 vlcPort,
@@ -122,7 +117,7 @@ public class VlcController {
                 subtitleParam
             );
 
-            System.out.println("[VLC-PLAY] Triggering media play: " + targetUrl);
+            System.out.println("[VLC-PLAY] Sending playback request to: " + targetUrl);
 
             HttpURLConnection conn = (HttpURLConnection) new URL(targetUrl).openConnection();
             conn.setRequestMethod("GET");
@@ -131,9 +126,8 @@ public class VlcController {
 
             int responseCode = conn.getResponseCode();
             if (responseCode != 200) {
-                System.err.println("[VLC-PLAY] VLC rejected request, status: " + responseCode);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                     .body("VLC HTTP control failed");
+                System.err.printf("[VLC-PLAY] HTTP %d from VLC\n", responseCode);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("VLC HTTP control failed");
             }
 
             return ResponseEntity.ok("Playback started");
