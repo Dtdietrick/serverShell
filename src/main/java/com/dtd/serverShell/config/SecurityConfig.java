@@ -40,7 +40,17 @@ public PasswordEncoder passwordEncoder() {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-            .csrf(csrf -> csrf.disable())
+            .csrf(csrf -> csrf
+            		.ignoringRequestMatchers(
+            	        "/streams/**",        // static
+            			"/login",             // form login POST
+            			"/logout",            // logout fetch is POST
+            			"/vlc/hls",           // start HLS
+            			"/emulator/launch",   // start emulator
+            			"/saves/**",          // upload saves
+            			"/admin/add",         // admin add user
+            			"/user/password"      // change password
+            ))
             .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
             .authorizeHttpRequests(auth -> auth
             	    .requestMatchers(
@@ -50,10 +60,12 @@ public PasswordEncoder passwordEncoder() {
             	        "/login", "/logout",
             	        "/css/**", "/js/**",
             	        "/epubReader.html",
-            	        "/user/role"
+            	        "/user/role",
+            	        "/streams/**"
             	    ).permitAll()
             	    .requestMatchers("/admin/**").hasRole("ADMIN")
             	    .requestMatchers("/user/**").authenticated()
+            	    .requestMatchers("/vlc/**").authenticated()
             	    .anyRequest().authenticated()
             )
             .formLogin(form -> form
