@@ -155,7 +155,7 @@ export function shufflePlaylist() {
   } while (randomIndex === currentTrackIndex);
 
   currentTrackIndex = randomIndex;
-  playMedia(currentPlaylist[randomIndex], true, true);
+  AppPlayer.playMedia(currentPlaylist[randomIndex], true, true);
 }
 
 // Export helper needed by playlist (playMedia is in mediaExplorer.js)

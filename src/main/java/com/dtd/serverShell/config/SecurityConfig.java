@@ -39,33 +39,20 @@ public PasswordEncoder passwordEncoder() {
     
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
-            .csrf(csrf -> csrf
-            		.ignoringRequestMatchers(
-            	        "/streams/**",        // static
-            			"/login",             // form login POST
-            			"/logout",            // logout fetch is POST
-            			"/vlc/hls",           // start HLS
-            			"/emulator/launch",   // start emulator
-            			"/saves/**",          // upload saves
-            			"/admin/add",         // admin add user
-            			"/user/password"      // change password
-            ))
+        http
+        	.csrf(csrf -> csrf.disable())
             .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
             .authorizeHttpRequests(auth -> auth
-            	    .requestMatchers(
-            	    	"/emulator/**", 
-            	        "/roms/**",
-            	        "/saves/**",       
-            	        "/login", "/logout",
-            	        "/css/**", "/js/**",
-            	        "/epubReader.html",
-            	        "/user/role",
-            	        "/streams/**"
-            	    ).permitAll()
+            		//VLC stream
+                    .requestMatchers("/streams/**").permitAll()
+                    // Authentication pages
+                    .requestMatchers("/login", "/css/**", "/js/**","/user/role", "/images/**").permitAll()
+            		//custom eumulator and vlc
+                    .requestMatchers("/vlc/hls").authenticated()            // POST start
+                    .requestMatchers("/vlc/hls/**").authenticated()         // DELETE stop
+                    .requestMatchers("/emulator/**", "/roms/**", "/saves/**", "/epubReader.html").authenticated()                
             	    .requestMatchers("/admin/**").hasRole("ADMIN")
             	    .requestMatchers("/user/**").authenticated()
-            	    .requestMatchers("/vlc/**").authenticated()
             	    .anyRequest().authenticated()
             )
             .formLogin(form -> form
@@ -80,7 +67,8 @@ public PasswordEncoder passwordEncoder() {
                 .logoutSuccessUrl("/login?logout")
                 .invalidateHttpSession(true)
                 .deleteCookies("JSESSIONID")
-            )
-            .build();
+            );
+        
+            return http.build();
     }
 }

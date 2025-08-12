@@ -21,10 +21,6 @@ import {
   resetHistory,
 } from "/explorer/history.js";
 
-import {
-  playMedia
-} from "/media/media.js";
-
 import { loadPlaylist } from "/media/mediaPlaylist.js";
 import { 
     updateBackButton, 
@@ -215,7 +211,7 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
     } else {
           const fullPath = filePath.startsWith(prefix) ? filePath : prefix + filePath;
           setCurrentPath(fullPath); 
-          li.onclick = () => playMedia(fullPath)
+          li.onclick = () => AppPlayer.playMedia(fullPath)
     }
 
     ul.appendChild(li);

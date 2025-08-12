@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
@@ -43,29 +44,41 @@ public class VlcService {
         Path outDir = session.outDir();
         Files.createDirectories(outDir);
 
-        // Build VLC command using EXACT paths from session.outDir()
-        // NOTE: keep your existing codec/transcode settings; only the paths changed.
-        String indexPath = outDir.resolve("index.m3u8").toString();
-        String segPath   = outDir.resolve("seg-########.ts").toString();
+        Path indexFile = outDir.resolve("index.m3u8");
+        
+        String indexPath = indexFile.toAbsolutePath().normalize().toString();
+        String segPath   = outDir.resolve("seg-########.ts").toAbsolutePath().normalize().toString();
+
+        // 4s @ 24fps → keyint=96; use 120 for 30fps
+        String venc = "x264{keyint=96,min-keyint=96,scenecut=0,bframes=0}";
+        String sout =
+          "#transcode{vcodec=h264,venc=" + venc + ",acodec=mp4a,ab=128,channels=2}:"
+        + "std{access=livehttp{seglen=4,delsegs=true,numsegs=12,"
+        + "index='" + indexPath + "',index-url=seg-########.ts},"
+        + "mux=ts{use-key-frames},dst='" + segPath + "'}";
 
         ProcessBuilder pb = new ProcessBuilder(
-            "cvlc",
-            mediaFile.toString(),
-            "--sout",
-            "#transcode{vcodec=h264,acodec=mp4a,ab=128,channels=2}:std{access=livehttp{seglen=2,delsegs=true,numsegs=10,index="
-                + indexPath + ",index-url=seg-########.ts},mux=ts,dst=" + segPath + "}",
-            "--no-sout-all",
-            "--sout-keep",
-            "--quiet"
+          "cvlc", mediaFile.toString(),
+          "--sout", sout,
+          "-vvv", "--sout-all", "--sout-keep",
+          "--avcodec-hw=none",
+          "--sout-mux-caching=800"
         );
+        
         pb.redirectError(outDir.resolve("vlc.err").toFile());
         pb.redirectOutput(outDir.resolve("vlc.out").toFile());
-        Process p = pb.start();
+        log.info("VLC --sout: {}", sout);
 
+        Files.writeString(outDir.resolve(".vlc_write_probe"), "ok", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        Files.deleteIfExists(outDir.resolve(".vlc_write_probe"));
+        
+        Process p = pb.start();
         sessions.put(sid, new Proc(session, p));
+
         log.info("sid {}, outDir {}, m3u8 {}", session.sid(), session.outDir(), session.m3u8Url());
-        Path index = session.outDir().resolve("index.m3u8");
-        waitForIndex(index, Duration.ofSeconds(5));
+
+        // Wait a bit longer the first time; index is created when the first segment closes
+        waitForPlayableManifest(indexFile, outDir, Duration.ofSeconds(10));
         return session;
     }
 
@@ -93,13 +106,20 @@ public class VlcService {
         log.info("stopped sid {}, cleaned {}", sid, dir);
     }
     
-    private void waitForIndex(Path index, Duration timeout) {
-    	  long deadline = System.nanoTime() + timeout.toNanos();
-    	  try {
-    	    while (System.nanoTime() < deadline) {
-    	      if (Files.exists(index) && Files.size(index) > 0) return;
-    	      Thread.sleep(150);
-    	    }
-    	  } catch (Exception ignored) {}
-    	}
+    private void waitForPlayableManifest(Path indexFile, Path outDir, Duration timeout) throws IOException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            if (Files.exists(indexFile) && Files.size(indexFile) > 0) {
+                // cheap check: look for #EXTINF (segment entries) and target duration
+                String s = Files.readString(indexFile);
+                if (s.contains("#EXT-X-TARGETDURATION") && s.contains("#EXTINF")) return;
+            }
+            // or: bail out early if we already have the first segment file
+            try (var stream = Files.list(outDir)) {
+                if (stream.anyMatch(p -> p.getFileName().toString().startsWith("seg-00000001"))) return;
+            } catch (IOException ignored) { }
+            try { Thread.sleep(200); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+        }
+        throw new IOException("Timed out waiting for playable HLS manifest: " + indexFile);
+    }
 }
