@@ -18,19 +18,19 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.dtd.serverShell.services.MediaService;
-import com.dtd.serverShell.services.VlcService;
-import com.dtd.serverShell.config.VlcSession;
+import com.dtd.serverShell.services.VideoService;
+import com.dtd.serverShell.config.VideoSession;
 
 @RestController
-@RequestMapping("/vlc")
-public class VlcMediaController {
-    private final VlcService vlc;
+@RequestMapping("/video")
+public class VideoController {
+    private final VideoService video;
 
     @Value("${media.dir}") String mediaDir;
 
-    public VlcMediaController(VlcService vlc) { this.vlc = vlc; }
+    public VideoController(VideoService video) { this.video = video; }
 
-    private static final Logger logger = LoggerFactory.getLogger(VlcMediaController.class);
+    private static final Logger logger = LoggerFactory.getLogger(VideoController.class);
     
     @PostMapping("/hls")
     public ResponseEntity<Map<String, String>> start(@RequestBody Map<String, String> payload) throws IOException {
@@ -51,7 +51,7 @@ public class VlcMediaController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
 
-        VlcSession session = vlc.start(username, resolved);
+        VideoSession session = video.start(username, resolved);
         
         String absM3u8 = ServletUriComponentsBuilder
                 .fromCurrentContextPath()
@@ -68,15 +68,15 @@ public class VlcMediaController {
 
     @DeleteMapping("/hls/{sid}")
     public ResponseEntity<Void> stop(@PathVariable String sid) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        var ses = vlc.getSession(sid);
-        if (ses == null || !ses.username().equals(auth.getName())) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        var ses = video.getSession(sid);
+        if (ses != null && ses.username().equals(auth.getName())) {
+            video.stop(sid);
         }
-        vlc.stop(sid);
+        // Always 204, even if already gone or not your session (idempotent + unload-friendly)
         return ResponseEntity.noContent().build();
     }
 }

@@ -16,9 +16,10 @@ public class WebConfig implements WebMvcConfigurer {
   @Override
   public void addResourceHandlers(ResourceHandlerRegistry registry) {
    
-    registry.addResourceHandler("/streams/**")
-      .addResourceLocations("file:" + (streamsDir.endsWith("/") ? streamsDir : streamsDir + "/"))
-      .setCacheControl(CacheControl.noStore()) 
-      .resourceChain(true);
-  }
+	    String root = streamsDir.endsWith("/") ? streamsDir : streamsDir + "/";
+	    registry.addResourceHandler("/streams/**")
+	            .addResourceLocations("file:" + root)
+	            .setCacheControl(CacheControl.noStore())
+	            .resourceChain(true);
+	  }
 }

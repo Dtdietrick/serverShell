@@ -132,6 +132,8 @@ WantedBy=multi-user.target
 - [✅] gba audio fix(v1.0.0.3)
 - [✅] copy protect(v1.0.0.3)
 - [✅] no more ghost folders(v1.0.0.4)
+- [ ] video player overhaul (v1.0.0.5)
+- [ ] fix audio only stream
 - [ ] ESLint/Checkstyle
 - [ ] gba custom controls
 - [ ] User favorite playlist
