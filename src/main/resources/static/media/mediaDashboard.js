@@ -16,7 +16,7 @@ export function handleJumpParam() {
 
     setTimeout(() => {
       renderFolder(folder);
-      playMedia(jumpTo);
+      AppPlayer.playMedia(jumpTo);
     }, 500); // Or shorter if renderFolder is fast
   } else {
     renderFolder(jumpTo);

@@ -39,36 +39,55 @@ public PasswordEncoder passwordEncoder() {
     
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
-            .csrf(csrf -> csrf.disable())
-            .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
-            .authorizeHttpRequests(auth -> auth
-            	    .requestMatchers(
-            	    	"/emulator/**", 
-            	        "/roms/**",
-            	        "/saves/**",       
-            	        "/login", "/logout",
-            	        "/css/**", "/js/**",
-            	        "/epubReader.html",
-            	        "/user/role"
-            	    ).permitAll()
-            	    .requestMatchers("/admin/**").hasRole("ADMIN")
-            	    .requestMatchers("/user/**").authenticated()
-            	    .anyRequest().authenticated()
-            )
-            .formLogin(form -> form
-                .loginPage("/login")
-                .loginProcessingUrl("/login")
-                .successHandler(customLoginSuccessHandler)
-                .failureUrl("/login?error")
-                .permitAll()
-            )
-            .logout(logout -> logout
-                .logoutUrl("/logout")
-                .logoutSuccessUrl("/login?logout")
-                .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID")
-            )
-            .build();
+        http
+        .csrf(csrf -> csrf.disable())
+        .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
+        .authorizeHttpRequests(auth -> auth
+            // HLS files must be public so the player can GET them
+            .requestMatchers("/streams/**").permitAll()
+
+            // PUBLIC STATIC ASSETS (ES modules, CSS, fonts, images, helper JS)
+            .requestMatchers(
+                "/css/**",
+                "/fonts/**",
+                "/media/**",     
+                "/ui/**",        
+                "/explorer/**",
+                "/emulator/**",
+                "/util/**",
+                "/images/**",
+                //extensions anywhere under static
+                "/*.css","/*.js","/*.mjs","/*.map","/*.png","/*.svg","/*.jpg","/*.ico"
+            ).permitAll()
+
+            // Auth pages / small APIs used pre-login
+            .requestMatchers("/login", "/user/role").permitAll()
+
+            // VIDEO control endpoints (start/stop) must be authenticated
+            .requestMatchers("/video/hls", "/video/hls/**").authenticated()
+
+            // Emulator app + protected pages
+            .requestMatchers("/emulator/**", "/roms/**", "/saves/**", "/epubReader.html").authenticated()
+            .requestMatchers("/admin/**").hasRole("ADMIN")
+            .requestMatchers("/user/**").authenticated()
+
+            // Everything else = auth
+            .anyRequest().authenticated()
+        )
+        .formLogin(form -> form
+            .loginPage("/login")
+            .loginProcessingUrl("/login")
+            .successHandler(customLoginSuccessHandler)
+            .failureUrl("/login?error")
+            .permitAll()
+        )
+        .logout(logout -> logout
+            .logoutUrl("/logout")
+            .logoutSuccessUrl("/login?logout")
+            .invalidateHttpSession(true)
+            .deleteCookies("JSESSIONID")
+        );
+        
+        return http.build();
     }
 }
