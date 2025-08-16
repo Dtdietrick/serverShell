@@ -10,16 +10,16 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
-	
+    
   @Value("${streams.dir}") String streamsDir;
   
   @Override
   public void addResourceHandlers(ResourceHandlerRegistry registry) {
    
-	    String root = streamsDir.endsWith("/") ? streamsDir : streamsDir + "/";
-	    registry.addResourceHandler("/streams/**")
-	            .addResourceLocations("file:" + root)
-	            .setCacheControl(CacheControl.noStore())
-	            .resourceChain(true);
-	  }
+        String root = streamsDir.endsWith("/") ? streamsDir : streamsDir + "/";
+        registry.addResourceHandler("/streams/**")
+                .addResourceLocations("file:" + root)
+                .setCacheControl(CacheControl.noStore())
+                .resourceChain(true);
+      }
 }

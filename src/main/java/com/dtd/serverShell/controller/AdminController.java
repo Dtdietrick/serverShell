@@ -23,13 +23,13 @@ import passwordHasher.passwordHasher;
 @RestController
 @RequestMapping("/admin")
 public class AdminController {
-	
-	private final UserService userService;
-	private final AppUserRepository userRepository;
     
-	public AdminController(UserService userService, AppUserRepository userRepository ) {
-    	this.userService = userService;
-    	this.userRepository = userRepository;
+    private final UserService userService;
+    private final AppUserRepository userRepository;
+    
+    public AdminController(UserService userService, AppUserRepository userRepository ) {
+        this.userService = userService;
+        this.userRepository = userRepository;
     }
     
     @PostMapping("/add")

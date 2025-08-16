@@ -32,8 +32,8 @@ public class MediaService {
     public ResponseEntity<Resource> getMedia(String filename, String rangeHeader, @RequestParam(required = false) Boolean fromPlaylist) throws IOException {
 
         // If the media request is from a playlist, prepend "Music/" folder to the filename path
-    	// When you play from playlist the path drops "Music", for some reason
-    	// Think it has to do with how it resolves the paths when looking through folders 
+        // When you play from playlist the path drops "Music", for some reason
+        // Think it has to do with how it resolves the paths when looking through folders 
         if (Boolean.TRUE.equals(fromPlaylist)) {
             filename = "Music/" + filename;
         }

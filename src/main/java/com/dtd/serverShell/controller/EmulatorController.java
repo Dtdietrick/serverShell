@@ -6,6 +6,8 @@ import com.dtd.serverShell.repository.AppUserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.*;
@@ -18,6 +20,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.file.*;
 import java.security.Principal;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,13 +35,22 @@ public class EmulatorController {
     @Value("${pulse.dir}")
     private String pulseDir;
     
+    private final Environment env;
     private final Logger logger = LoggerFactory.getLogger(EmulatorController.class);
     private final AppUserRepository appUserRepository;
 
-    public EmulatorController(AppUserRepository appUserRepository) {
+    public EmulatorController(AppUserRepository appUserRepository, Environment env) {
         this.appUserRepository = appUserRepository;
+        this.env = env;
     }
 
+    private static String hostUid() { String s = runAndTrim("id","-u"); return s.isEmpty() ? "1000" : s; }
+    private static String hostGid() { String s = runAndTrim("id","-g"); return s.isEmpty() ? "1000" : s; }
+    private static boolean isLinux() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        return os.contains("linux");
+    }
+    
     @PostMapping("/launch")
     public ResponseEntity<String> launchEmulator(@RequestParam String rom, Principal principal) {
         if (principal == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -49,8 +61,8 @@ public class EmulatorController {
             }
 
             String username = principal.getName();
-            System.out.println("🧩 [RetroInit] ROM Save Dir Root: " + romSaveDir);
-            System.out.println("👤 [RetroInit] Username: " + username);
+            System.out.println("[RetroInit] ROM Save Dir Root: " + romSaveDir);
+            System.out.println("[RetroInit] Username: " + username);
             
             initializeUserRetroarchIfMissing(username);
             Path configPath = Paths.get(romSaveDir, "users", username, "config");
@@ -63,37 +75,66 @@ public class EmulatorController {
             Files.createDirectories(savesPath);
 
     
-            int hostPort  = findFreePortInRange(33000, 33100);
-
-            List<String> cmd = List.of(
-            	    "docker", "run", "--rm",
-
-            	    // Mount config and save dirs
-            	    "-v", configPath.toAbsolutePath() + ":/config",
-            	    "-v", savesPath.toAbsolutePath() + ":/saves",
-
-            	    // Mount PulseAudio socket from host
-            	    "--mount", "type=bind,source=" + pulseDir + ",target=/tmp/pulseaudio.socket",
-            	    "-e", "PULSE_SERVER=unix:/tmp/pulseaudio.socket",
-
-            	    // VNC port
-            	    "-p", hostPort + ":52300",
-
-            	    // Image + ROM
-            	    "retroarch-linux",
-            	    rom
-            	);
+            boolean prodAudio = useProdAudio();
+            String pulseSocketPath = resolvePulseSocketPath(pulseDir);
+            int hostPort = findFreePortInRange(33000, 33100);
             
+            List<String> cmd = new ArrayList<>(List.of(
+                "docker", "run", "--rm",
+                //saves and config are outside container
+                "-v", configPath.toAbsolutePath() + ":/config",
+                "-v", savesPath.toAbsolutePath()  + ":/saves",
+                //mount audio
+                "--mount", "type=bind,source=" + pulseSocketPath + ",target=/tmp/pulseaudio.socket,readonly",
+                //mount vnc port
+                "-p", hostPort + ":52300",
+                //audio switch for prod
+                "-e", "RETRO_USE_PROD_AUDIO=" + (prodAudio ? "true" : "false")
+            ));
+
+                // prod specific for headless linux (pain brought me here)
+            if (isLinux()) {
+                cmd.addAll(List.of("--user", hostUid() + ":" + hostGid()));
+            }
+            
+            if (prodAudio) {
+                Path userCookie = configPath.resolve("pulse").resolve("cookie");
+                cmd.addAll(List.of(
+                //solve the cookie permission issue     
+                "-v", userCookie.toAbsolutePath() + ":/config/pulse/cookie:ro",
+                "-e", "PULSE_COOKIE=/config/pulse/cookie",
+                //set host locations for container
+                "-e", "PULSE_SERVER=unix:/tmp/pulseaudio.socket",
+                "-e", "PULSE_SINK=retro_null",
+                "-e", "PULSE_SOURCE=retro_null.monitor",
+                //set home for container
+                "-e", "HOME=/config",
+                "-e", "XDG_CONFIG_HOME=/config"
+            ));
+            }
+                
+            else {
+               // legacy path — keeps original logic
+               cmd.addAll(List.of(
+                      "-e", "PULSE_SERVER=unix:/tmp/pulseaudio.socket" 
+               ));
+            }
+            
+             //set rom
+            cmd.addAll(List.of("retroarch-linux", rom));
+
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.inheritIO();
+            System.out.println("[RetroInit] Audio mode: " + (prodAudio ? "PROD" : "LEGACY"));
             System.out.println("Launching emulator: " + String.join(" ", cmd));
             pb.start();
 
             String serverIp = InetAddress.getLocalHost().getHostAddress();
             String vncUrl = "http://"+serverIp+":" + hostPort + "/vnc.html?autoconnect=true&resize=scale";
             return ResponseEntity.ok(vncUrl);
-        } catch (IOException e) {
-            logger.error("❌ Emulator launch failed", e);
+        }
+        catch (IOException e) {
+            logger.error("Emulator launch failed", e);
             return ResponseEntity.status(500).body("Failed to launch emulator: " + e.getMessage());
         }
     }
@@ -116,7 +157,7 @@ public class EmulatorController {
         Files.createDirectories(savePath.getParent());
         Files.copy(file.getInputStream(), savePath, StandardCopyOption.REPLACE_EXISTING);
 
-        logger.info("💾 Uploaded save for user {}: {}", username, savePath);
+        logger.info("Uploaded save for user {}: {}", username, savePath);
         return ResponseEntity.ok("Save uploaded");
     }
 
@@ -147,7 +188,7 @@ public class EmulatorController {
                         .body(new org.springframework.core.io.PathResource(fallbackPath));
             }
 
-            logger.info("❌ No default save found for {}", romFileName);
+            logger.info("No default save found for {}", romFileName);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
@@ -178,7 +219,7 @@ public class EmulatorController {
         boolean needsInit = !Files.exists(configPath) || !Files.exists(savesPath);
 
         if (needsInit) {
-            logger.info("🧪 Initializing config/saves for new user '{}'", username);
+            logger.info("Initializing config/saves for new user '{}'", username);
 
             // Copy default template files
             Path defaultRoot = Paths.get(romSaveDir, "default");
@@ -196,7 +237,7 @@ public class EmulatorController {
                         Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
                     }
                 } catch (IOException e) {
-                    logger.error("❌ Failed to copy default config file '{}'", source, e);
+                    logger.error("Failed to copy default config file '{}'", source, e);
                 }
             });
 
@@ -211,10 +252,35 @@ public class EmulatorController {
                         Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
                     }
                 } catch (IOException e) {
-                    logger.error("❌ Failed to copy default save file '{}'", source, e);
+                    logger.error("Failed to copy default save file '{}'", source, e);
                 }
             });
             logger.info(" Default config/saves initialized for user '{}'", username);
         }
+    }
+    
+    private boolean useProdAudio() {
+        return env != null && env.acceptsProfiles(Profiles.of("prod"));
+    }
+   
+    private String resolvePulseSocketPath(String pulseDir) {
+        java.nio.file.Path p = java.nio.file.Paths.get(pulseDir);
+        try {
+            if (java.nio.file.Files.isDirectory(p)) {
+                return p.resolve("native").toString(); // e.g., /run/user/1000/pulse/native
+            }
+        } catch (Exception ignore) {}
+        return p.toString(); // already a socket file path
+    }
+    //helpers for permissions errors
+    private static String runAndTrim(String... args) {
+        try {
+            Process p = new ProcessBuilder(args).redirectErrorStream(true).start();
+            try (java.io.InputStream is = p.getInputStream()) {
+                String out = new String(is.readAllBytes());
+                p.waitFor();
+                return out.trim();
+            }
+        } catch (Exception e) { return ""; }
     }
 }

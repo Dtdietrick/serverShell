@@ -37,13 +37,13 @@ import jakarta.servlet.http.HttpServletRequest;
 @RestController
 @RequestMapping("/media/api")
 public class MediaController {
-	
-	
+    
+    
     @Value("${media.dir}")
     private String mediaDir;
     
-	private static final Logger log = LoggerFactory.getLogger(MediaController.class);
-	private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.serverShell.audit");
+    private static final Logger log = LoggerFactory.getLogger(MediaController.class);
+    private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.serverShell.audit");
     private final MediaService mediaService;
     private final allowedMediaType allowedmediaType;
     private final AntPathMatcher pathMatcher = new AntPathMatcher(); // Used for pattern matching URI paths

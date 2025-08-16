@@ -77,12 +77,12 @@ export function loadPlaylist(name, reset = true) {
     })
     .catch(() => {
       playlistLoading = false;
-	  
-	  const shuffleButton = document.getElementById("shuffle-button");
-	  if (shuffleButton) {
-	    shuffleButton.disabled = playlistLoading || currentPlaylist.length <= 1;
-	    shuffleButton.classList.toggle("disabled", shuffleButton.disabled);
-	  }
+      
+      const shuffleButton = document.getElementById("shuffle-button");
+      if (shuffleButton) {
+        shuffleButton.disabled = playlistLoading || currentPlaylist.length <= 1;
+        shuffleButton.classList.toggle("disabled", shuffleButton.disabled);
+      }
     });
 }
 

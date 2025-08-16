@@ -28,9 +28,9 @@ public PasswordEncoder passwordEncoder() {
         }
     };
 }
-	@Autowired
-	private CustomLoginSuccessHandler customLoginSuccessHandler;
-	
+    @Autowired
+    private CustomLoginSuccessHandler customLoginSuccessHandler;
+    
     private final CustomUserDetailsService userDetailsService;
 
     public SecurityConfig(CustomUserDetailsService userDetailsService) {

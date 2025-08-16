@@ -25,8 +25,8 @@ public class UserController {
     private final AppUserRepository userRepository;
     
     public UserController(UserService userService, AppUserRepository userRepository ) {
-    	this.userService = userService;
-    	this.userRepository = userRepository;
+        this.userService = userService;
+        this.userRepository = userRepository;
     }
     
     @PostMapping("/password")
@@ -65,12 +65,12 @@ public class UserController {
     
     @GetMapping("/role")
     public ResponseEntity<?> getCurrentUser(Principal principal) {
-    	Optional<AppUser> userOpt = userRepository.findByUsername(principal.getName());
-    	if (userOpt.isEmpty()) {
-    	    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
-    	}
+        Optional<AppUser> userOpt = userRepository.findByUsername(principal.getName());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
+        }
 
-    	AppUser user = userOpt.get();
-    	return ResponseEntity.ok(Map.of("username", user.getUsername(), "role", user.getRole()));
+        AppUser user = userOpt.get();
+        return ResponseEntity.ok(Map.of("username", user.getUsername(), "role", user.getRole()));
     }
 }

@@ -9,14 +9,14 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class allowedMediaType{
-	private static final Logger log = LoggerFactory.getLogger(allowedMediaType.class);
-	
+    private static final Logger log = LoggerFactory.getLogger(allowedMediaType.class);
+    
     public static final List<String> SUPPORTED_EXTENSIONS = List.of(
             ".mp3", ".mp4", ".mkv", ".webm",".m3u", ".epub"
         );
 
     
-	public static MediaType getMediaType(String filename) {
+    public static MediaType getMediaType(String filename) {
         String lower = filename.toLowerCase();
 
         if (lower.endsWith(".mp4")) return MediaType.valueOf("video/mp4");
@@ -36,7 +36,7 @@ public class allowedMediaType{
         // Default binary stream if unknown type
         return MediaType.APPLICATION_OCTET_STREAM;
     }
-	
+    
     public static boolean isSupportedMediaFile(String name) {
         String lower = name.toLowerCase();
         String extension = lower.substring(lower.lastIndexOf('.'));
