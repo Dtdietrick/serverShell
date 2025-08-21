@@ -1,7 +1,5 @@
 package com.dtd.serverShell.services;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -28,7 +26,9 @@ public class MediaService {
 
     @Value("${media.dir}")
     private String mediaDir;
-    private static final Logger log = LoggerFactory.getLogger(MediaService.class);
+    private static final com.dtd.serverShell.logging.ssLogger log =
+            com.dtd.serverShell.logging.serverShellLoggerFactory
+                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
     public ResponseEntity<Resource> getMedia(String filename, String rangeHeader, @RequestParam(required = false) Boolean fromPlaylist) throws IOException {
 
         // If the media request is from a playlist, prepend "Music/" folder to the filename path
@@ -48,7 +48,7 @@ public class MediaService {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
 
-        // ❌ Return 404 if file does not exist or is not a regular file
+        // Return 404 if file does not exist or is not a regular file
         if (!Files.exists(resolvedPath) || !Files.isRegularFile(resolvedPath)) {
             log.error("[MediaService] File not found: " + resolvedPath);
             return ResponseEntity.notFound().build();
@@ -113,9 +113,9 @@ public class MediaService {
             log.warn("Invalid media path: " + targetPath);
             return List.of();
         }
-        System.out.println("📂 [MediaScan] media.dir = " + mediaDir);
-        System.out.println("📂 [MediaScan] currentPath = " + currentPath);
-        System.out.println("📂 [MediaScan] Resolved targetPath = " + targetPath.toAbsolutePath());
+        System.out.println("[MediaScan] media.dir = " + mediaDir);
+        System.out.println("MediaScan] currentPath = " + currentPath);
+        System.out.println("[MediaScan] Resolved targetPath = " + targetPath.toAbsolutePath());
         try (Stream<Path> stream = Files.list(targetPath)) {
             List<String> items = stream
                 // Skip the root folder itself

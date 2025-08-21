@@ -6,8 +6,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,7 +15,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import com.dtd.serverShell.services.MediaService;
 import com.dtd.serverShell.services.VideoService;
 import com.dtd.serverShell.config.VideoSession;
 
@@ -30,7 +27,9 @@ public class VideoController {
 
     public VideoController(VideoService video) { this.video = video; }
 
-    private static final Logger logger = LoggerFactory.getLogger(VideoController.class);
+    private static final com.dtd.serverShell.logging.ssLogger log =
+            com.dtd.serverShell.logging.serverShellLoggerFactory
+                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
     
     @PostMapping("/hls")
     public ResponseEntity<Map<String, String>> start(@RequestBody Map<String, String> payload) throws IOException {
@@ -58,7 +57,7 @@ public class VideoController {
                 .path(session.m3u8Url())    // e.g. "/streams/<sid>/index.m3u8"
                 .toUriString();
         
-        logger.info("Started session {} and m3u8 {}", session.sid(), absM3u8);
+        log.info("Started session {} and m3u8 {}", session.sid(), absM3u8);
         // IMPORTANT: This m3u8 matches the on-disk folder exactly
         return ResponseEntity.ok(Map.of(
             "sessionId", session.sid(),

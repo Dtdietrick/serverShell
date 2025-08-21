@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class CustomLoginSuccessHandler implements AuthenticationSuccessHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(CustomLoginSuccessHandler.class);
+    private static final Logger log = LoggerFactory.getLogger("com.dtd.serverShell.serverShell-full");
     private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.serverShell.audit");
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,

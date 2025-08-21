@@ -23,6 +23,9 @@ public class UserController {
 
     private final UserService userService;
     private final AppUserRepository userRepository;
+    private static final com.dtd.serverShell.logging.ssLogger log =
+            com.dtd.serverShell.logging.serverShellLoggerFactory
+                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
     
     public UserController(UserService userService, AppUserRepository userRepository ) {
         this.userService = userService;

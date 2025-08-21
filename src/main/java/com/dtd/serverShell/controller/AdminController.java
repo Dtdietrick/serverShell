@@ -4,6 +4,8 @@ import java.security.Principal;
 import java.util.Map;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,7 +25,9 @@ import passwordHasher.passwordHasher;
 @RestController
 @RequestMapping("/admin")
 public class AdminController {
-    
+    private static final com.dtd.serverShell.logging.ssLogger log =
+            com.dtd.serverShell.logging.serverShellLoggerFactory
+                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
     private final UserService userService;
     private final AppUserRepository userRepository;
     
