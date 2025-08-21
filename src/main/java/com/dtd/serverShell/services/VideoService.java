@@ -4,18 +4,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.time.Instant;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -23,7 +17,9 @@ import com.dtd.serverShell.config.VideoSession;
 
 @Service
 public class VideoService {
-    private static final Logger log = LoggerFactory.getLogger(VideoService.class);
+    private static final com.dtd.serverShell.logging.ssLogger log =
+            com.dtd.serverShell.logging.serverShellLoggerFactory
+                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
 
     // base path and url for streams
     @Value("${streams.dir}") private String streamsDir; // FS
@@ -34,10 +30,10 @@ public class VideoService {
     private record Proc(VideoSession session, Process process) {}
 
     public VideoSession start(String username, Path mediaFile) throws IOException {
-    	//one session per user
-    	stopAllForUser(username);
-    	
-    	String sid = UUID.randomUUID().toString();
+        //one session per user
+        stopAllForUser(username);
+        
+        String sid = UUID.randomUUID().toString();
         VideoSession session = new VideoSession(
                 sid,
                 username,
@@ -52,19 +48,19 @@ public class VideoService {
         String segPattern = outDir.resolve("seg-%08d.ts").toString();
 
         List<String> cmd = List.of(
-        	    "ffmpeg", "-hide_banner", "-loglevel", "info",
-        	    "-re", "-i", mediaFile.toString(),
-        	    "-map", "0:v:0", "-map", "0:a:0",
-        	    "-c:v", "libx264", "-profile:v", "main", "-level", "3.1", "-pix_fmt", "yuv420p",
-        	    "-r", "30", "-g", "120", "-keyint_min", "120", "-sc_threshold", "0",
-        	    "-x264-params", "repeat-headers=1:vbv-maxrate=2500:vbv-bufsize=5000", "-b:v", "2500k",
-        	    "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
-        	    "-hls_time", "4", "-hls_list_size", "24",
-        	    "-hls_flags", "independent_segments+delete_segments",
-        	    "-start_number", "1",                                   
-        	    "-hls_segment_filename", segPattern,
-        	    indexFile.toString()
-        	);
+                "ffmpeg", "-hide_banner", "-loglevel", "info",
+                "-re", "-i", mediaFile.toString(),
+                "-map", "0:v:0", "-map", "0:a:0",
+                "-c:v", "libx264", "-profile:v", "main", "-level", "3.1", "-pix_fmt", "yuv420p",
+                "-r", "30", "-g", "120", "-keyint_min", "120", "-sc_threshold", "0",
+                "-x264-params", "repeat-headers=1:vbv-maxrate=2500:vbv-bufsize=5000", "-b:v", "2500k",
+                "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+                "-hls_time", "4", "-hls_list_size", "24",
+                "-hls_flags", "independent_segments+delete_segments",
+                "-start_number", "1",                                   
+                "-hls_segment_filename", segPattern,
+                indexFile.toString()
+            );
         
         //launch ffpmeg
         ProcessBuilder pb = new ProcessBuilder(cmd);

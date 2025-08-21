@@ -1,7 +1,5 @@
 package com.dtd.serverShell.controller;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -30,11 +28,13 @@ import java.util.stream.Stream;
 public class EpubController {
 
     private final Path baseDir;
-    private final Logger logger = LoggerFactory.getLogger(EpubController.class);
+    private static final com.dtd.serverShell.logging.ssLogger log =
+            com.dtd.serverShell.logging.serverShellLoggerFactory
+                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
 
     public EpubController(@Value("${media.dir}") String mediaDir) {
         this.baseDir = Paths.get(mediaDir);
-        logger.info("EpubController base directory set to {}", baseDir.toAbsolutePath());
+        log.info("EpubController base directory set to {}", baseDir.toAbsolutePath());
     }
 
     @GetMapping
@@ -63,7 +63,7 @@ public class EpubController {
 
         // If no range header, serve first 64KB chunk to trigger range requests on client
         if (rangeHeader == null) {
-            logger.info("No Range header, serving full EPUB: {} ({} bytes)", file, fileLength);
+            log.info("No Range header, serving full EPUB: {} ({} bytes)", file, fileLength);
             InputStreamResource fullResource = new InputStreamResource(Files.newInputStream(filePath));
             return ResponseEntity.ok()
                     .header(HttpHeaders.ACCEPT_RANGES, "bytes")
@@ -78,12 +78,12 @@ public class EpubController {
             long end = httpRange.getRangeEnd(fileLength);
             long rangeLength = end - start + 1;
 
-            logger.info("Range header: {} — serving bytes {} to {} ({} bytes)", rangeHeader, start, end, rangeLength);
+            log.info("Range header: {} — serving bytes {} to {} ({} bytes)", rangeHeader, start, end, rangeLength);
 
             InputStream inputStream = Files.newInputStream(filePath);
 
             if (inputStream.skip(start) != start) {
-                logger.warn("Unable to skip to requested start position in file");
+                log.warn("Unable to skip to requested start position in file");
                 return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE).build();
             }
 
@@ -97,7 +97,7 @@ public class EpubController {
                     .body(resource);
 
         } catch (Exception e) {
-            logger.error("Invalid Range header: {}", rangeHeader, e);
+            log.error("Invalid Range header: {}", rangeHeader, e);
 
             // Fall back: serve first 64KB chunk instead of whole file
             InputStream inputStream = Files.newInputStream(filePath);

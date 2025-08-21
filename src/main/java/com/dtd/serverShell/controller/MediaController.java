@@ -7,10 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,13 +34,15 @@ import jakarta.servlet.http.HttpServletRequest;
 @RestController
 @RequestMapping("/media/api")
 public class MediaController {
-	
-	
+    
+    
     @Value("${media.dir}")
     private String mediaDir;
     
-	private static final Logger log = LoggerFactory.getLogger(MediaController.class);
-	private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.serverShell.audit");
+    private static final com.dtd.serverShell.logging.ssLogger log =
+            com.dtd.serverShell.logging.serverShellLoggerFactory
+                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
+    private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.serverShell.audit");
     private final MediaService mediaService;
     private final allowedMediaType allowedmediaType;
     private final AntPathMatcher pathMatcher = new AntPathMatcher(); // Used for pattern matching URI paths
@@ -102,6 +101,7 @@ public class MediaController {
 
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             log.warn("Unauthorized media access attempt for path: {}", requestedPath);
+            auditLog.info("Unauthorized media access attempt for path: {}", username);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 

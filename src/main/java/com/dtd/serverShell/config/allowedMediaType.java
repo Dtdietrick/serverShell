@@ -1,22 +1,21 @@
 package com.dtd.serverShell.config;
 import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 // Determine MediaType from filename extension for proper HTTP Content-Type header
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
 @Service
 public class allowedMediaType{
-	private static final Logger log = LoggerFactory.getLogger(allowedMediaType.class);
-	
+    private static final com.dtd.serverShell.logging.ssLogger log =
+            com.dtd.serverShell.logging.serverShellLoggerFactory
+                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
+    
     public static final List<String> SUPPORTED_EXTENSIONS = List.of(
             ".mp3", ".mp4", ".mkv", ".webm",".m3u", ".epub"
         );
 
     
-	public static MediaType getMediaType(String filename) {
+    public static MediaType getMediaType(String filename) {
         String lower = filename.toLowerCase();
 
         if (lower.endsWith(".mp4")) return MediaType.valueOf("video/mp4");
@@ -36,7 +35,7 @@ public class allowedMediaType{
         // Default binary stream if unknown type
         return MediaType.APPLICATION_OCTET_STREAM;
     }
-	
+    
     public static boolean isSupportedMediaFile(String name) {
         String lower = name.toLowerCase();
         String extension = lower.substring(lower.lastIndexOf('.'));
