@@ -1,5 +1,7 @@
 package com.dtd.serverShell.services;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -26,9 +28,7 @@ public class MediaService {
 
     @Value("${media.dir}")
     private String mediaDir;
-    private static final com.dtd.serverShell.logging.ssLogger log =
-            com.dtd.serverShell.logging.serverShellLoggerFactory
-                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
+    private static final Logger log = LoggerFactory.getLogger(MediaService.class);
     public ResponseEntity<Resource> getMedia(String filename, String rangeHeader, @RequestParam(required = false) Boolean fromPlaylist) throws IOException {
 
         // If the media request is from a playlist, prepend "Music/" folder to the filename path

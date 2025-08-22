@@ -25,9 +25,7 @@ import passwordHasher.passwordHasher;
 @RestController
 @RequestMapping("/admin")
 public class AdminController {
-    private static final com.dtd.serverShell.logging.ssLogger log =
-            com.dtd.serverShell.logging.serverShellLoggerFactory
-                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
+    private static final Logger log = LoggerFactory.getLogger(AdminController.class);
     private final UserService userService;
     private final AppUserRepository userRepository;
     

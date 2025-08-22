@@ -73,7 +73,7 @@ export function launchEmulator(rom, button) {
 </div>
 </body></html>`);
   
-  // Close inital load screen
+  // Close initial load screen
   win.document.close();
 
   if (button) { button.disabled = true; button.textContent = 'Launching…'; }
@@ -91,7 +91,7 @@ export function launchEmulator(rom, button) {
     console.log('[emulator]', message);
   };
 
-  // async work within live popup content
+  // Single container launch - no duplicate logic
   fetch('/emulator/launch?rom=' + encodeURIComponent(rom), {
     method: 'POST',
     credentials: 'same-origin',
@@ -107,7 +107,6 @@ export function launchEmulator(rom, button) {
     
     if (!res.ok) throw new Error(`Launch failed: HTTP ${res.status}`);
 
-  
     const response = await res.json();
     
     // Check for error response
@@ -115,7 +114,7 @@ export function launchEmulator(rom, button) {
       throw new Error(response.error);
     }
 	
-	// Handle JSON response with VNC(Video) & WS(Audio)
+    // Handle JSON response with VNC(Video) & WS(Audio)
     let vncUrl = response.vncUrl;
     let audioUrl = response.audioUrl;
     if (!vncUrl) throw new Error('Backend returned no vncUrl');
@@ -124,6 +123,54 @@ export function launchEmulator(rom, button) {
     updateStatus('Got VNC URL, container is ready!');
     console.log('[emulator] VNC URL:', vncUrl);
 
+    // SINGLE CLEANUP SETUP - Extract port and set up monitoring
+    const vncUrlMatch = vncUrl.match(/:(\d+)/);
+    if (vncUrlMatch) {
+      const vncPort = vncUrlMatch[1];
+      console.log('[emulator] Captured VNC port for cleanup:', vncPort);
+      
+      let cleanupCalled = false; // Prevent multiple cleanup calls
+      
+      const cleanupContainer = () => {
+        if (cleanupCalled) return; // Already cleaned up
+        cleanupCalled = true;
+        
+        console.log('[emulator] Sending cleanup signal for port:', vncPort);
+        
+        // Stop the audio first
+        try {
+          if (window.__emuAudioWS) {
+            window.__emuAudioWS.close();
+            console.log('[emulator] Closed audio WebSocket');
+          }
+          if (window.__emuAudioEl) {
+            window.__emuAudioEl.pause();
+            window.__emuAudioEl.src = '';
+            console.log('[emulator] Stopped audio element');
+          }
+        } catch (error) {
+          console.error('[emulator] Error stopping audio:', error);
+        }
+        
+        // Then stop the container
+        fetch('/emulator/cleanup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ port: vncPort })
+        }).catch(error => {
+          console.error('[emulator] Cleanup request failed:', error);
+        });
+      };
+
+      // ONLY monitor popup closure - nothing else
+      const checkClosed = setInterval(() => {
+        if (win.closed) {
+          clearInterval(checkClosed);
+          cleanupContainer();
+        }
+      }, 1000);
+    }
+    
     // Normalize URL (HTTP - For now)  
     const u = new URL(vncUrl, window.location.href);
     u.protocol = 'http:';  // Force HTTP
@@ -135,18 +182,16 @@ export function launchEmulator(rom, button) {
     console.log('[emulator] Attempting audio connection to:', audioUrl);
     
     try {
-      // Start audio in the POPUP window, not the main window
+      // Start audio in MAIN window (revert back)
       await playWsWebmOpus(audioUrl);
       updateStatus('Audio connected! Loading game...');
       console.log('[emulator] Audio connected successfully');
-    }
-	//audio is ride or die - no audio, no go 
-	catch (e) {
+    } catch (e) {
       console.error('[emulator] Audio connection failed:', e);
       updateStatus('Error Loading Emulator Audio...');
     }
 
-    //Redirect popup to the emulator
+    // Redirect popup to the emulator
     updateStatus('Loading emulator interface...');
     
     setTimeout(() => {
@@ -156,14 +201,14 @@ export function launchEmulator(rom, button) {
         console.error('[emulator] Failed to redirect popup:', e);
         updateStatus('Error loading emulator. Please close and try again.');
       }
-    }, 1000); // Small delay to show final status
+    }, 1000);
 
     resetUI();
   })
   .catch((err) => {
     console.error('[emulator] Launch error:', err);
     
-    // Show error in popup instead of alert
+    // Show error in popup
     try {
       win.document.body.innerHTML = `
         <div style="font-family:system-ui;background:#000;color:#fff;padding:40px;text-align:center;">
@@ -186,6 +231,7 @@ export function launchEmulator(rom, button) {
     resetUI();
   });
 }
+
 /* emulator audio player */
 function playWsWebmOpus(wsUrl) {
   const mime = 'audio/webm; codecs="opus"';
@@ -194,6 +240,7 @@ function playWsWebmOpus(wsUrl) {
     return Promise.reject(new Error('MediaSource/Opus not supported'));
   }
 
+  // Create audio element in MAIN window (back to original)
   let audio = document.getElementById('emu-audio');
   if (!audio) {
     audio = document.createElement('audio');
@@ -210,7 +257,6 @@ function playWsWebmOpus(wsUrl) {
   const ms = new MediaSource();
   audio.src = URL.createObjectURL(ms);
 
-  /*Return Promise that resolves when WebSocket connects*/ 
   return new Promise((resolve, reject) => {
     const preQueue = [];
     const ws = new WebSocket(wsUrl);
@@ -224,9 +270,8 @@ function playWsWebmOpus(wsUrl) {
         resolved = true;
         reject(new Error('Audio WebSocket connection timeout'));
       }
-    }, 10000); // 10 second timeout
+    }, 10000);
 
-	//connect
     ws.onopen = () => {
       console.log('[emulator] Audio WebSocket connected to:', wsUrl);
       if (!resolved) {
@@ -235,7 +280,7 @@ function playWsWebmOpus(wsUrl) {
         resolve();
       }
     };
-	//error
+
     ws.onerror = (err) => {
       console.error('[emulator] Audio WebSocket error:', err);
       if (!resolved) {
@@ -244,7 +289,7 @@ function playWsWebmOpus(wsUrl) {
         reject(new Error('Audio WebSocket connection failed'));
       }
     };
-	//close
+
     ws.onclose = (event) => {
       console.log('[emulator] Audio WebSocket closed:', event.code, event.reason);
       if (!resolved) {
@@ -257,7 +302,6 @@ function playWsWebmOpus(wsUrl) {
 
     ws.onmessage = (e) => { preQueue.push(new Uint8Array(e.data)); };
 
-	//audio listener
     ms.addEventListener('sourceopen', () => {
       const sb = ms.addSourceBuffer(mime);
       try { sb.mode = 'sequence'; } catch {}

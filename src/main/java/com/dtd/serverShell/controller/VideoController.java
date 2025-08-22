@@ -6,6 +6,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,9 +29,7 @@ public class VideoController {
 
     public VideoController(VideoService video) { this.video = video; }
 
-    private static final com.dtd.serverShell.logging.ssLogger log =
-            com.dtd.serverShell.logging.serverShellLoggerFactory
-                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
+    private static final Logger log = LoggerFactory.getLogger(VideoController.class);
     
     @PostMapping("/hls")
     public ResponseEntity<Map<String, String>> start(@RequestBody Map<String, String> payload) throws IOException {

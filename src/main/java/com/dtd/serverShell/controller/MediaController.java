@@ -39,10 +39,7 @@ public class MediaController {
     @Value("${media.dir}")
     private String mediaDir;
     
-    private static final com.dtd.serverShell.logging.ssLogger log =
-            com.dtd.serverShell.logging.serverShellLoggerFactory
-                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
-    private static final Logger auditLog = LoggerFactory.getLogger("com.dtd.serverShell.audit");
+    private static final Logger log = LoggerFactory.getLogger(MediaController.class);
     private final MediaService mediaService;
     private final allowedMediaType allowedmediaType;
     private final AntPathMatcher pathMatcher = new AntPathMatcher(); // Used for pattern matching URI paths
@@ -97,11 +94,9 @@ public class MediaController {
         String requestedPath = request.getRequestURI();
 
         log.info("MEDIA ACCESS: user={}, path={}, ip={}, agent={}", username, requestedPath, ip, userAgent);
-        auditLog.info("MEDIA ACCESS: user={}, path={}, ip={}, agent={}", username, requestedPath, ip, userAgent);
 
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             log.warn("Unauthorized media access attempt for path: {}", requestedPath);
-            auditLog.info("Unauthorized media access attempt for path: {}", username);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 

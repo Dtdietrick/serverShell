@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/emulator")
@@ -47,9 +48,7 @@ public class EmulatorController {
     @Value("${retroarch.image}")
     private String retroImage;
 
-    private static final com.dtd.serverShell.logging.ssLogger log =
-            com.dtd.serverShell.logging.serverShellLoggerFactory
-                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
+    private static final Logger log = LoggerFactory.getLogger(EmulatorController.class);
     
     private static final class UserPaths {
         // public on purpose so you can assign exactly like before
@@ -57,7 +56,16 @@ public class EmulatorController {
         public Path savePath;     // was: userSavePath
         public Path cookieDir;    // was: userCookieDir
     }
-
+    private static final class ContainerInfo {
+        public final String containerName;
+        public final Process process;
+        
+        public ContainerInfo(String containerName, Process process) {
+            this.containerName = containerName;
+            this.process = process;
+        }
+    }
+    private static final Map<String, ContainerInfo> activeContainers = new ConcurrentHashMap<>();
     private final Logger logger = LoggerFactory.getLogger(EmulatorController.class);
     private final AppUserRepository appUserRepository;
 
@@ -102,9 +110,8 @@ public class EmulatorController {
                 return errorResponse("[INIT AUDIO ERR] cookie not readable at {}" + hostCookie);
             }
             
-           // startup commands   
-            List<String> cmd = new ArrayList<>(List.of(
-                 
+            // startup commands   
+            List<String> cmd = new ArrayList<>(List.of(               
                 "docker", "run", "--rm",
                  //bind save & config paths
                  "-v", userPaths.configPath.toAbsolutePath().toAbsolutePath() + ":/config",
@@ -113,6 +120,7 @@ public class EmulatorController {
                  "--mount", "type=bind,source=" + pulseSocketPath + ",target=/tmp/pulseaudio.socket,readonly",
                  "-p", vncPort + ":52300",
                  "-p", audioPort + ":8081",
+                 //so container can monitor live port (internal bound to 52300)
                  "-e", "PULSE_SERVER=unix:/tmp/pulseaudio.socket",
                  //cookie is prewarmed in host dir
                  "-e", "PULSE_COOKIE=/config/pulse/cookie",
@@ -122,7 +130,6 @@ public class EmulatorController {
                  //set base path (sanity)
                  "-e", "HOME=/config",
                  "-e", "XDG_CONFIG_HOME=/config"
-                 
             ));
                  
             Integer socketUid = extractUidFromSocketOwner(pulseSocketPath);
@@ -130,16 +137,21 @@ public class EmulatorController {
                 return errorResponse("[PULSE AUDIO ERR] Prod audio requires /run/user/<uid>/pulse/native (got: " + pulseSocketPath + ")");
             }
             
-            String gid = hostGid(); // existing helper
+            //correct audio permissions 
+            String gid = hostGid();
             cmd.addAll(List.of("--user", socketUid.toString() + ":" + gid));
+            //name for later cleanup
+            String containerName = "emulator-" + username + "-" + vncPort;
+            cmd.addAll(List.of("--name", containerName));
             // set ROM
             cmd.addAll(List.of(retroImage, rom));
             //run command
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.inheritIO();
             System.out.println("Launching emulator: " + String.join(" ", cmd));
-            pb.start();
+            Process containerProcess = pb.start();
 
+            activeContainers.put(String.valueOf(vncPort), new ContainerInfo(containerName, containerProcess));
             String serverIp = InetAddress.getLocalHost().getHostAddress();
             String vncUrl = "http://" + serverIp + ":" + vncPort + "/vnc.html?autoconnect=true&resize=scale&path=websockify";
             String audioUrl = "ws://" + serverIp + ":" + audioPort + "/";
@@ -156,6 +168,39 @@ public class EmulatorController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return errorResponse("[INIT ERR] Failed to launch emulator: " + e.getMessage());
+        }
+    }
+    
+    @PostMapping("/cleanup")
+    public ResponseEntity<?> cleanup(@RequestBody Map<String, String> request) {
+        String port = request.get("port");
+        
+        if (port == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Port required"));
+        }
+        
+        try {
+            ContainerInfo containerInfo = activeContainers.get(port);
+            if (containerInfo != null) {
+                // Stop the Docker container
+                ProcessBuilder stopPb = new ProcessBuilder("docker", "stop", containerInfo.containerName);
+                Process stopProcess = stopPb.start();
+                int exitCode = stopProcess.waitFor();
+                
+                if (exitCode == 0) {
+                    logger.info("Successfully stopped container {} for port {}", containerInfo.containerName, port);
+                    activeContainers.remove(port);
+                    return ResponseEntity.ok(Map.of("success", true));
+                } else {
+                    return ResponseEntity.status(500).body(Map.of("error", "Failed to stop container"));
+                }
+            } else {
+                logger.warn("No container found for port {}", port);
+                return ResponseEntity.ok(Map.of("success", false, "message", "Container not found"));
+            }
+        } catch (Exception e) {
+            logger.error("Cleanup error for port " + port, e);
+            return ResponseEntity.status(500).body(Map.of("error", "Cleanup failed"));
         }
     }
     
@@ -230,7 +275,7 @@ public class EmulatorController {
     }
 
     //linux user setup
-    private static String hostUid() { String s = runAndTrim("id","-u"); return s.isEmpty() ? "1000" : s; }
+    //private static String hostUid() { String s = runAndTrim("id","-u"); return s.isEmpty() ? "1000" : s; }
     private static String hostGid() { String s = runAndTrim("id","-g"); return s.isEmpty() ? "1000" : s; }
     private static boolean isLinux() {
         String os = System.getProperty("os.name", "").toLowerCase();
@@ -280,7 +325,7 @@ public class EmulatorController {
                         Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
                     }
                 } catch (IOException e) {
-                    logger.error("Failed to copy default config file '{}'", source, e);
+                    logger.info("Failed to copy default config file '{}'", source, e);
                 }
             });
 
@@ -295,7 +340,7 @@ public class EmulatorController {
                         Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
                     }
                 } catch (IOException e) {
-                    logger.error("Failed to copy default save file '{}'", source, e);
+                    logger.info("Failed to copy default save file '{}'", source, e);
                 }
             });
             logger.info(" Default config/save initialized for user '{}'", username);
@@ -353,7 +398,7 @@ public class EmulatorController {
         }
 
         if (!Files.exists(savePath)) {
-            logger.warn("Save not found for user {}, checking default", username);
+            logger.info("Save not found for user {}, checking default", username);
 
             Path fallbackPath = Paths.get(romSaveDir, "default", "save", romFileName).normalize();
             if (Files.exists(fallbackPath)) {

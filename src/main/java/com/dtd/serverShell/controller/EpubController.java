@@ -1,5 +1,7 @@
 package com.dtd.serverShell.controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -28,13 +30,10 @@ import java.util.stream.Stream;
 public class EpubController {
 
     private final Path baseDir;
-    private static final com.dtd.serverShell.logging.ssLogger log =
-            com.dtd.serverShell.logging.serverShellLoggerFactory
-                .getServerLogger("com.dtd.serverShell.serverShell-full", /*alsoDebug=*/true);
+    private static final Logger log = LoggerFactory.getLogger(EpubController.class);
 
     public EpubController(@Value("${media.dir}") String mediaDir) {
         this.baseDir = Paths.get(mediaDir);
-        log.info("EpubController base directory set to {}", baseDir.toAbsolutePath());
     }
 
     @GetMapping

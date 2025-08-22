@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <configuration scan="true">
 
   <!-- === Properties === -->
@@ -8,68 +9,44 @@
 
   <!-- Console (JVM stdout) -->
   <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-    <encoder><pattern>${LOG_PATTERN}</pattern></encoder>
+    <encoder>
+      <pattern>${LOG_PATTERN}</pattern>
+    </encoder>
   </appender>
 
-  <!-- FULL: the “everything” file (root + explicit -full logger) -->
-  <appender name="FULL_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>${env.logging.dir}/serverShell-full.log</file>
+  <!-- Main log file: captures everything from DEBUG up -->
+  <appender name="MAIN_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${env.logging.dir}/serverShell.log</file>
     <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-      <fileNamePattern>${env.logging.dir}/serverShell-full.%d{yyyy-MM-dd}.log</fileNamePattern>
+      <fileNamePattern>${env.logging.dir}/serverShell.%d{yyyy-MM-dd}.log</fileNamePattern>
       <maxHistory>30</maxHistory>
     </rollingPolicy>
-    <encoder><pattern>${LOG_PATTERN}</pattern></encoder>
+    <encoder>
+      <pattern>${LOG_PATTERN}</pattern>
+    </encoder>
   </appender>
 
-  <!-- DEBUG: optional mirror stream (INFO+, short) -->
-  <appender name="DEBUG_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>${env.logging.dir}/serverShell-debug.log</file>
+  <!-- Error-only log file: captures only ERROR level -->
+  <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${env.logging.dir}/serverShell-error.log</file>
     <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-      <fileNamePattern>${env.logging.dir}/serverShell-debug.%d{yyyy-MM-dd}.log</fileNamePattern>
+      <fileNamePattern>${env.logging.dir}/serverShell-error.%d{yyyy-MM-dd}.log</fileNamePattern>
       <maxHistory>30</maxHistory>
     </rollingPolicy>
-    <encoder><pattern>${LOG_PATTERN}</pattern></encoder>
-    <!-- Keep the mirror concise: drop DEBUG/TRACE in this file -->
+    <encoder>
+      <pattern>${LOG_PATTERN}</pattern>
+    </encoder>
+    <!-- Only capture ERROR level and above -->
     <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-      <level>INFO</level>
+      <level>ERROR</level>
     </filter>
   </appender>
- 
-  <!-- AUDIT (explicit writes only) -->
-  <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>${env.logging.dir}/serverShell-audit.log</file>
-    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-      <fileNamePattern>${env.logging.dir}/serverShell-audit.%d{yyyy-MM-dd}.log</fileNamePattern>
-      <maxHistory>30</maxHistory>
-    </rollingPolicy>
-    <encoder><pattern>${LOG_PATTERN}</pattern></encoder>
-  </appender>
 
-  <!-- === Root: capture EVERYTHING (framework + app) to FULL, plus console + ERR === -->
+  <!-- === Root logger: captures everything === -->
   <root level="DEBUG">
     <appender-ref ref="CONSOLE"/>
-    <appender-ref ref="FULL_FILE"/>
+    <appender-ref ref="MAIN_FILE"/>
     <appender-ref ref="ERROR_FILE"/>
   </root>
 
-  <!-- === Named app loggers (no bubbling; precise routing) === -->
-
-  <!-- Always-on FULL: accept DEBUG+; write to full file (+ error file for ERROR) -->
-  <logger name="com.dtd.serverShell.serverShell-full" level="DEBUG" additivity="false">
-    <appender-ref ref="FULL_FILE"/>
-    <appender-ref ref="ERROR_FILE"/>
-    <appender-ref ref="CONSOLE"/> -->
-  </logger>
-
-  <!-- Optional DEBUG mirror: accept INFO+ only to keep it short -->
-  <logger name="com.dtd.serverShell.serverShell-debug" level="INFO" additivity="false">
-    <appender-ref ref="DEBUG_FILE"/>
-    <!-- Optional console echo:
-    <appender-ref ref="CONSOLE"/> -->
-  </logger>
-  
-  <!-- Audit trail (on call only) -->
-  <logger name="com.dtd.fileServer.audit" level="INFO" additivity="false">
-    <appender-ref ref="AUDIT_FILE"/>
-  </logger>
 </configuration>
