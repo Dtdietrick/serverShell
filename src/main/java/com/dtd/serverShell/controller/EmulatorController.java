@@ -1,6 +1,5 @@
 package com.dtd.serverShell.controller;
 
-import com.dtd.serverShell.config.RomRegistry;
 import com.dtd.serverShell.model.AppUser;
 import com.dtd.serverShell.repository.AppUserRepository;
 
@@ -89,7 +88,7 @@ public class EmulatorController {
             Files.createDirectories(userPaths.configPath.toAbsolutePath());
             Files.createDirectories(userPaths.savePath.toAbsolutePath() );
             log.info("[INIT DIR] Config path: " + userPaths.configPath.toAbsolutePath());
-            log.info("[INIT DIR] Saves path: " + userPaths.savePath.toAbsolutePath() );
+            log.info("[INIT DIR] save path: " + userPaths.savePath.toAbsolutePath() );
             //decide ports
             int vncPort   = findFreePortInRange(33000, 33100);
             int audioPort = vncPort + 1;
@@ -109,14 +108,13 @@ public class EmulatorController {
                 "docker", "run", "--rm",
                  //bind save & config paths
                  "-v", userPaths.configPath.toAbsolutePath().toAbsolutePath() + ":/config",
-                 "-v", userPaths.savePath.toAbsolutePath()  + ":/saves",
+                 "-v", userPaths.savePath.toAbsolutePath()  + ":/save",
                  //bind & mount ports
                  "--mount", "type=bind,source=" + pulseSocketPath + ",target=/tmp/pulseaudio.socket,readonly",
                  "-p", vncPort + ":52300",
                  "-p", audioPort + ":8081",
-                 //cookies
                  "-e", "PULSE_SERVER=unix:/tmp/pulseaudio.socket",
-                 "-v", hostCookie.toAbsolutePath() + ":/config/pulse/cookie:ro",
+                 //cookie is prewarmed in host dir
                  "-e", "PULSE_COOKIE=/config/pulse/cookie",
                  //host audio config
                  "-e", "PULSE_SINK=retro_null",
@@ -256,20 +254,20 @@ public class EmulatorController {
     private void initializeUserRetroarchIfMissing(String username) throws IOException {
         Path userRoot = Paths.get(romSaveDir, "users", username);
         Path configPath = userRoot.resolve("config");
-        Path savesPath = userRoot.resolve("saves");
+        Path savePath = userRoot.resolve("save");
 
         userPaths.configPath = configPath;
-        userPaths.savePath = savesPath;
+        userPaths.savePath = savePath;
         
-        boolean needsInit = !Files.exists(configPath) || !Files.exists(savesPath);
+        boolean needsInit = !Files.exists(configPath) || !Files.exists(savePath);
 
         if (needsInit) {
-            logger.info("Initializing config/saves for new user '{}'", username);
+            logger.info("Initializing config/save for new user '{}'", username);
 
             // Copy default template files
             Path defaultRoot = Paths.get(romSaveDir, "default");
             Path defaultConfig = defaultRoot.resolve("config");
-            Path defaultSaves  = defaultRoot.resolve("saves");
+            Path defaultsave  = defaultRoot.resolve("save");
 
             Files.walk(defaultConfig).forEach(source -> {
                 try {
@@ -286,10 +284,10 @@ public class EmulatorController {
                 }
             });
 
-            Files.walk(defaultSaves).forEach(source -> {
+            Files.walk(defaultsave).forEach(source -> {
                 try {
-                    Path relative = defaultSaves.relativize(source);
-                    Path destination = savesPath.resolve(relative);
+                    Path relative = defaultsave.relativize(source);
+                    Path destination = savePath.resolve(relative);
                     if (Files.isDirectory(source)) {
                         Files.createDirectories(destination);
                     } else {
@@ -300,7 +298,7 @@ public class EmulatorController {
                     logger.error("Failed to copy default save file '{}'", source, e);
                 }
             });
-            logger.info(" Default config/saves initialized for user '{}'", username);
+            logger.info(" Default config/save initialized for user '{}'", username);
         }
     }
     
@@ -316,14 +314,14 @@ public class EmulatorController {
         } catch (Exception e) { return ""; }
     }
     
-    @PostMapping("/saves/")
+    @PostMapping("/save/")
     public ResponseEntity<?> uploadSave(@PathVariable String romFileName,
                                         @RequestParam("file") MultipartFile file,
                                         Principal principal) throws IOException {
         if (principal == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
         String username = principal.getName();
-        Path userSaveDir = Paths.get(romSaveDir, "users", username, "saves");
+        Path userSaveDir = Paths.get(romSaveDir, "users", username, "save");
       
         //Sanitize
         Path savePath = userSaveDir.resolve(romFileName).normalize();
@@ -339,13 +337,13 @@ public class EmulatorController {
         return ResponseEntity.ok("Save uploaded");
     }
 
-    @GetMapping("/saves/{romFileName:.+}")
+    @GetMapping("/save/{romFileName:.+}")
     public ResponseEntity<Resource> downloadSave(@PathVariable String romFileName,
                                                  Principal principal) throws IOException {
         if (principal == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
         String username = principal.getName();
-        Path userSaveDir = Paths.get(romSaveDir, "users", username, "saves");
+        Path userSaveDir = Paths.get(romSaveDir, "users", username, "save");
       
         //Sanitize
         Path savePath = userSaveDir.resolve(romFileName).normalize();
@@ -357,7 +355,7 @@ public class EmulatorController {
         if (!Files.exists(savePath)) {
             logger.warn("Save not found for user {}, checking default", username);
 
-            Path fallbackPath = Paths.get(romSaveDir, "default", "saves", romFileName).normalize();
+            Path fallbackPath = Paths.get(romSaveDir, "default", "save", romFileName).normalize();
             if (Files.exists(fallbackPath)) {
                 logger.info(" Serving default save: {}", fallbackPath);
                 return ResponseEntity.ok()

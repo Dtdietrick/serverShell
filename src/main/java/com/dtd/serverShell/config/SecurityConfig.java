@@ -67,7 +67,7 @@ public PasswordEncoder passwordEncoder() {
             .requestMatchers("/video/hls", "/video/hls/**").authenticated()
 
             // Emulator app + protected pages
-            .requestMatchers("/emulator/**", "/roms/**", "/saves/**", "/epubReader.html").authenticated()
+            .requestMatchers("/emulator/**", "/roms/**", "/save/**", "/epubReader.html").authenticated()
             .requestMatchers("/admin/**").hasRole("ADMIN")
             .requestMatchers("/user/**").authenticated()
 

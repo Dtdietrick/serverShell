@@ -1,103 +1,10 @@
-/* audio player */
-function playWsWebmOpus(wsUrl) {
-  const mime = 'audio/webm; codecs="opus"';
-  if (!window.MediaSource || !MediaSource.isTypeSupported(mime)) {
-    console.warn('[emulator] MediaSource or Opus not supported');
-    return Promise.reject(new Error('MediaSource/Opus not supported'));
-  }
-
-  let audio = document.getElementById('emu-audio');
-  if (!audio) {
-    audio = document.createElement('audio');
-    audio.id = 'emu-audio';
-    audio.autoplay = true;
-    audio.playsInline = true;
-    audio.controls = false;
-    audio.style.display = 'none';
-    document.body.appendChild(audio);
-  }
-
-  try { if (window.__emuAudioWS) window.__emuAudioWS.close(); } catch {}
-
-  const ms = new MediaSource();
-  audio.src = URL.createObjectURL(ms);
-
-  // Return Promise that resolves when WebSocket connects
-  return new Promise((resolve, reject) => {
-    const preQueue = [];
-    const ws = new WebSocket(wsUrl);
-    ws.binaryType = 'arraybuffer';
-    window.__emuAudioWS = ws;
-    window.__emuAudioEl = audio;
-
-    let resolved = false;
-    const timeoutId = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        reject(new Error('Audio WebSocket connection timeout'));
-      }
-    }, 10000); // 10 second timeout
-
-    ws.onopen = () => {
-      console.log('[emulator] Audio WebSocket connected to:', wsUrl);
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeoutId);
-        resolve();
-      }
-    };
-
-    ws.onerror = (err) => {
-      console.error('[emulator] Audio WebSocket error:', err);
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeoutId);
-        reject(new Error('Audio WebSocket connection failed'));
-      }
-    };
-
-    ws.onclose = (event) => {
-      console.log('[emulator] Audio WebSocket closed:', event.code, event.reason);
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeoutId);
-        reject(new Error(`Audio WebSocket closed: ${event.code} ${event.reason}`));
-      }
-      try { if (ms.readyState === 'open') ms.endOfStream(); } catch {}
-    };
-
-    ws.onmessage = (e) => { preQueue.push(new Uint8Array(e.data)); };
-
-    ms.addEventListener('sourceopen', () => {
-      const sb = ms.addSourceBuffer(mime);
-      try { sb.mode = 'sequence'; } catch {}
-
-      const queue = preQueue;
-      const pump = () => {
-        if (queue.length && !sb.updating && ms.readyState === 'open') {
-          sb.appendBuffer(queue.shift());
-        }
-      };
-      sb.addEventListener('updateend', pump);
-
-      ws.onmessage = (e) => { queue.push(new Uint8Array(e.data)); pump(); };
-
-      pump();
-      audio.muted = false;
-      audio.volume = 1.0;
-      audio.play().catch((playErr) => {
-        console.warn('[emulator] Audio play failed (user interaction required?):', playErr);
-      });
-    });
-  });
-}
-
 /* 
- * NEW APPROACH (works):
- * 1. Open popup with immediate content 
- * 2. Update popup content during async work
- * 3. Browser sees popup as legitimate
- */
+ * NEW APPROACH LESSONS LEARNED(works):
+ * 1 function launchEmulator(rom, button) -> Open popup with immediate content (blank)
+ * 2. ALL emulator logic on new popup const win = window.open();
+ * 3. vnc url for <video> fetch('/emulator/launch?rom=' + encodeURIComponent(rom) {method: 'POST'}
+ * 4. ws url for <audio> playWsWebmOpus(wsUrl) 
+*/
 export function launchEmulator(rom, button) {
   if (!rom || typeof rom !== 'string') throw new Error('[emulator] ROM is required');
   if (button && button.disabled) return;
@@ -105,7 +12,7 @@ export function launchEmulator(rom, button) {
   const originalText = button ? button.textContent : '';
   const resetUI = () => { if (button) { button.disabled = false; button.textContent = originalText; } };
 
-  // CRITICAL: Open popup IMMEDIATELY with content some (not blank)
+  // Open popup IMMEDIATELY with content some (not blank)
   const win = window.open('about:blank', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
   if (!win) { 
     alert('Popup blocked. Please allow popups for this site and try again.'); 
@@ -166,12 +73,12 @@ export function launchEmulator(rom, button) {
 </div>
 </body></html>`);
   
-  // Close the document to finish initial load
+  // Close inital load screen
   win.document.close();
 
   if (button) { button.disabled = true; button.textContent = 'Launching…'; }
 
-  // Helper function to update status in the popup
+  // Helper to update status in the popup
   const updateStatus = (message) => {
     try {
       const statusEl = win.document.getElementById('status');
@@ -184,12 +91,12 @@ export function launchEmulator(rom, button) {
     console.log('[emulator]', message);
   };
 
-  // async work while popup is live with content
+  // async work within live popup content
   fetch('/emulator/launch?rom=' + encodeURIComponent(rom), {
     method: 'POST',
     credentials: 'same-origin',
     headers: (() => {
-      // Simple CSRF handling for your current setup
+      // Simple CSRF handling
       const m = (document.cookie || '').match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
       return m ? { 'X-XSRF-TOKEN': decodeURIComponent(m[1]) } : {};
     })(),
@@ -200,14 +107,15 @@ export function launchEmulator(rom, button) {
     
     if (!res.ok) throw new Error(`Launch failed: HTTP ${res.status}`);
 
-    // Handle JSON response with VNC(Video) & WS(Audio)
+  
     const response = await res.json();
     
     // Check for error response
     if (response.error) {
       throw new Error(response.error);
     }
-    
+	
+	// Handle JSON response with VNC(Video) & WS(Audio)
     let vncUrl = response.vncUrl;
     let audioUrl = response.audioUrl;
     if (!vncUrl) throw new Error('Backend returned no vncUrl');
@@ -223,7 +131,7 @@ export function launchEmulator(rom, button) {
 
     updateStatus('Starting audio...');
 
-    // Use dynamic audio URL from backend (not pre-computed frontend)
+    // Use dynamic audio URL from backend
     console.log('[emulator] Attempting audio connection to:', audioUrl);
     
     try {
@@ -276,5 +184,100 @@ export function launchEmulator(rom, button) {
     }
     
     resetUI();
+  });
+}
+/* emulator audio player */
+function playWsWebmOpus(wsUrl) {
+  const mime = 'audio/webm; codecs="opus"';
+  if (!window.MediaSource || !MediaSource.isTypeSupported(mime)) {
+    console.warn('[emulator] MediaSource or Opus not supported');
+    return Promise.reject(new Error('MediaSource/Opus not supported'));
+  }
+
+  let audio = document.getElementById('emu-audio');
+  if (!audio) {
+    audio = document.createElement('audio');
+    audio.id = 'emu-audio';
+    audio.autoplay = true;
+    audio.playsInline = true;
+    audio.controls = false;
+    audio.style.display = 'none';
+    document.body.appendChild(audio);
+  }
+
+  try { if (window.__emuAudioWS) window.__emuAudioWS.close(); } catch {}
+
+  const ms = new MediaSource();
+  audio.src = URL.createObjectURL(ms);
+
+  /*Return Promise that resolves when WebSocket connects*/ 
+  return new Promise((resolve, reject) => {
+    const preQueue = [];
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
+    window.__emuAudioWS = ws;
+    window.__emuAudioEl = audio;
+
+    let resolved = false;
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        reject(new Error('Audio WebSocket connection timeout'));
+      }
+    }, 10000); // 10 second timeout
+
+	//connect
+    ws.onopen = () => {
+      console.log('[emulator] Audio WebSocket connected to:', wsUrl);
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeoutId);
+        resolve();
+      }
+    };
+	//error
+    ws.onerror = (err) => {
+      console.error('[emulator] Audio WebSocket error:', err);
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeoutId);
+        reject(new Error('Audio WebSocket connection failed'));
+      }
+    };
+	//close
+    ws.onclose = (event) => {
+      console.log('[emulator] Audio WebSocket closed:', event.code, event.reason);
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeoutId);
+        reject(new Error(`Audio WebSocket closed: ${event.code} ${event.reason}`));
+      }
+      try { if (ms.readyState === 'open') ms.endOfStream(); } catch {}
+    };
+
+    ws.onmessage = (e) => { preQueue.push(new Uint8Array(e.data)); };
+
+	//audio listener
+    ms.addEventListener('sourceopen', () => {
+      const sb = ms.addSourceBuffer(mime);
+      try { sb.mode = 'sequence'; } catch {}
+
+      const queue = preQueue;
+      const pump = () => {
+        if (queue.length && !sb.updating && ms.readyState === 'open') {
+          sb.appendBuffer(queue.shift());
+        }
+      };
+      sb.addEventListener('updateend', pump);
+
+      ws.onmessage = (e) => { queue.push(new Uint8Array(e.data)); pump(); };
+
+      pump();
+      audio.muted = false;
+      audio.volume = 1.0;
+      audio.play().catch((playErr) => {
+        console.warn('[emulator] Audio play failed (user interaction required?):', playErr);
+      });
+    });
   });
 }
