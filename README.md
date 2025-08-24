@@ -135,6 +135,8 @@ WantedBy=multi-user.target
 - [✅] video player overhaul (v1.0.0.5)
 - [✅] logging overhaul (v1.0.0.5)
 - [✅] NEW AUDIO [stable: (stream / emulator) audio stack & emulator rewrite] (v1.0.0.6)
+- [✅] Audio Only Stream Tweak (v1.0.0.7)
+- [✅] Ereader fix [revert] (v1.0.0.7)
 - [ ] ESLint/Checkstyle
 - [ ] gba custom controls
 - [ ] User favorite playlist

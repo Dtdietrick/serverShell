@@ -81,6 +81,7 @@ public class EmulatorController {
         if (principal == null) return errorResponse("Unauthorized access");
         Map<String, String> error = new HashMap<>();
         try {
+            
             // only allow approved roms
             if (!isLinux()) {
               return errorResponse("Requires linux server");
@@ -136,10 +137,7 @@ public class EmulatorController {
             if (socketUid == null) {
                 return errorResponse("[PULSE AUDIO ERR] Prod audio requires /run/user/<uid>/pulse/native (got: " + pulseSocketPath + ")");
             }
-            
-            //correct audio permissions 
-            String gid = hostGid();
-            cmd.addAll(List.of("--user", socketUid.toString() + ":" + gid));
+                       
             //name for later cleanup
             String containerName = "emulator-" + username + "-" + vncPort;
             cmd.addAll(List.of("--name", containerName));

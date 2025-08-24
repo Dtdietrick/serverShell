@@ -1,5 +1,7 @@
 package com.dtd.serverShell.services;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -32,5 +34,22 @@ public class UserService {
         user.setPassword(hashed);
         userRepository.save(user);
         return true;
+    }
+    
+    public void recordView(String username, String filename) {
+        Optional<AppUser> userOpt = userRepository.findByUsername(username);
+        userOpt.ifPresent(user -> {
+            List<String> history = user.getRecentViews();
+            if (history == null) history = new ArrayList<>();
+
+            history.remove(filename); // Remove if already in list
+            history.add(0, filename); // Add to front
+            if (history.size() > 10) {
+                history = history.subList(0, 10);
+            }
+
+            user.setRecentViews(history);
+            userRepository.save(user);
+        });
     }
 }

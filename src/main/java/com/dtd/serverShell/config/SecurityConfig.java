@@ -50,7 +50,7 @@ public PasswordEncoder passwordEncoder() {
             .requestMatchers(
                 "/css/**",
                 "/fonts/**",
-                "/media/**",     
+                "/media/**",  
                 "/ui/**",        
                 "/explorer/**",
                 "/emulator/**",
@@ -64,10 +64,11 @@ public PasswordEncoder passwordEncoder() {
             .requestMatchers("/login", "/user/role").permitAll()
 
             // VIDEO control endpoints (start/stop) must be authenticated
-            .requestMatchers("/video/hls", "/video/hls/**").authenticated()
+            .requestMatchers("/media/hls", "/media/hls/**").authenticated()
 
             // Emulator app + protected pages
-            .requestMatchers("/emulator/**", "/roms/**", "/save/**", "/epubReader.html").authenticated()
+            .requestMatchers("/emulator/**", "/roms/**", "/save/**").authenticated()
+            .requestMatchers("/epub/download", "/epubReader.html").authenticated()
             .requestMatchers("/admin/**").hasRole("ADMIN")
             .requestMatchers("/user/**").authenticated()
 

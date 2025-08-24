@@ -41,7 +41,7 @@ export function loadPlaylist(name, reset = true) {
   }
   
   fetch(
-    `/media/api/playlist?name=${encodeURIComponent(
+    `/media/playlist?name=${encodeURIComponent(
       name
     )}&offset=${playlistOffset}&limit=${playlistLimit}`
   )
