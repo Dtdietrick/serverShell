@@ -50,7 +50,7 @@ export async function firstRender(path) {
 // Render a folder: fetch contents, determine grouping, trigger view
 export function renderFolder(path, useGrouping = false) {
   const encoded = encodeURIComponent(path);
-  const apiPath = `/media/api/list?path=${encoded}`;
+  const apiPath = `/media/list?path=${encoded}`;
   setLastClickedGroupLabel("");
 
   if (getIsLoading()) return;
@@ -198,18 +198,16 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
 
     li.classList.add("file");
     li.textContent = fileName;
-
-    if (fileName.toLowerCase().endsWith(".m3u")) {
-      li.classList.replace("file", "playlist-file");
-      li.onclick = () => loadPlaylist(filePath.slice(0, -4));
-    } else if (fileName.toLowerCase().endsWith(".epub")) {
-      const link = document.createElement("a");
-      link.href = `/epubReader.html?file=${encodeURIComponent(filePath)}`;
-      link.textContent = "Read Online";
-      link.style.marginLeft = "1rem";
-      li.appendChild(link);
-    } else {
-          const fullPath = filePath.startsWith(prefix) ? filePath : prefix + filePath;
+	const fullPath = filePath.startsWith(prefix) ? filePath : prefix + filePath;
+	
+	 //Epub goes to the epub.html - no current path
+	 if (fileName.toLowerCase().endsWith(".epub")) {	
+		li.onclick = () => {
+		    window.location.href = `/epubReader.html?file=${encodeURIComponent(fullPath)}`;
+		};
+    }
+	//video & audio to embedded player 
+	else {
           setCurrentPath(fullPath); 
           li.onclick = () => AppPlayer.playMedia(fullPath)
     }
@@ -258,7 +256,7 @@ function isSupportedMedia(name) {
 
 // Fetch the list of supported media extensions (once at startup)
 function getAllowedMediaList() {
-  return fetch("/media/api/allowedMedia")
+  return fetch("/media/allowedMedia")
     .then((res) => res.json())
     .then((data) => {
       supportedExtensions = data.map(ext => ext.toLowerCase());

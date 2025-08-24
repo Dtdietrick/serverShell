@@ -13,79 +13,64 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import com.dtd.serverShell.config.VideoSession;
 
+import com.dtd.serverShell.model.MusicSession;   // [added]
+import com.dtd.serverShell.model.StreamSession;  // [added]
+import com.dtd.serverShell.model.VideoSession;  
 @Service
-public class VideoService {
-    private static final Logger log = LoggerFactory.getLogger(VideoService.class);
+public class StreamService {
+    private static final Logger log = LoggerFactory.getLogger(StreamService.class);
 
     // base path and url for streams
     @Value("${streams.dir}") private String streamsDir; // FS
+    @Value("${streams.baseUrl:/streams}") private String streamsBaseUrl;
 
     private final Map<String, Proc> sessions = new ConcurrentHashMap<>();
 
-    // encapsulate a running stream
-    private record Proc(VideoSession session, Process process) {}
-
+    // [VideoService.java] CHANGED: Proc now stores StreamSession, not VideoSession
+    private record Proc(StreamSession session, Process process) {}
+    
+    @Value("${music.hls.segment.seconds:4}")   private int musicSegSeconds;
+    @Value("${music.hls.list.size:24}")        private int musicListSize;
+    @Value("${music.audio.codec:aac}")         private String musicAudioCodec;
+    @Value("${music.audio.bitrate:128k}")      private String musicAudioBitrate;
+    @Value("${music.audio.rate:48000}")        private String musicAudioRate;
+    @Value("${music.audio.channels:2}")        private String musicAudioChannels;
     public VideoSession start(String username, Path mediaFile) throws IOException {
-        //one session per user
-        stopAllForUser(username);
-        
+        return startVideo(username, mediaFile);
+    }
+
+    //video
+    public VideoSession startVideo(String username, Path mediaFile) throws IOException {
+        stopAllForUser(username); // keep your one-session-per-user behavior
         String sid = UUID.randomUUID().toString();
-        VideoSession session = new VideoSession(
-                sid,
-                username,
-                Paths.get(streamsDir),
-                "/streams"
-        );
-
-        Path outDir = session.outDir();
-        Files.createDirectories(outDir);
-
-        Path indexFile = outDir.resolve("index.m3u8");
-        String segPattern = outDir.resolve("seg-%08d.ts").toString();
-
-        List<String> cmd = List.of(
-                "ffmpeg", "-hide_banner", "-loglevel", "info",
-                "-re", "-i", mediaFile.toString(),
-                "-map", "0:v:0", "-map", "0:a:0",
-                "-c:v", "libx264", "-profile:v", "main", "-level", "3.1", "-pix_fmt", "yuv420p",
-                "-r", "30", "-g", "120", "-keyint_min", "120", "-sc_threshold", "0",
-                "-x264-params", "repeat-headers=1:vbv-maxrate=2500:vbv-bufsize=5000", "-b:v", "2500k",
-                "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
-                "-hls_time", "4", "-hls_list_size", "24",
-                "-hls_flags", "independent_segments+delete_segments",
-                "-start_number", "1",                                   
-                "-hls_segment_filename", segPattern,
-                indexFile.toString()
-            );
-        
-        //launch ffpmeg
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectOutput(outDir.resolve("ffmpeg.out").toFile());
-        pb.redirectError(outDir.resolve("ffmpeg.err").toFile());
-        Process p = pb.start();
-        log.info("FFmpeg HLS started: sid={} outDir={} index={}", sid, outDir, indexFile); 
-        sessions.put(sid, new Proc(session, p));
-
-        
-        new Thread(() -> {
-            try { extractSidecarSubtitles(mediaFile, outDir, session); }
-            catch (Exception e) { log.warn("subs extract failed: {}", e.toString()); }
-        }, "subs-extract-" + sid).start();
-
-        final int HLS_SEG_LEN = 4;          // -hls_time
-        final int READY_SEGMENTS = 2;       //2 is plenty for stable start
-        final Duration READY_TIMEOUT =
-            Duration.ofSeconds(HLS_SEG_LEN * READY_SEGMENTS + 8); 
-        
-        waitForPlayableManifest(indexFile, READY_SEGMENTS, READY_TIMEOUT);
+        VideoSession session = new VideoSession(sid, username, Paths.get(streamsDir), streamsBaseUrl);
+        startFfmpegHls(mediaFile, session, /*audioOnly*/ false);
+        waitForPlayableManifest(session.outDir().resolve("index.m3u8"), 2, Duration.ofSeconds(4 * 2 + 8));
         return session;
     }
 
-    public VideoSession getSession(String sid) {
+    //music (audio-only)
+    public MusicSession startMusic(String username, Path mediaFile) throws IOException {
+        stopAllForUser(username);
+        String sid = UUID.randomUUID().toString();
+        MusicSession session = new MusicSession(sid, username, Paths.get(streamsDir), streamsBaseUrl);
+        startFfmpegHls(mediaFile, session, /*audioOnly*/ true);
+        // Music HLS readiness derived from musicSegSeconds/musicListSize, but 2 segments is usually enough
+        waitForPlayableManifest(session.outDir().resolve("index.m3u8"), 2, Duration.ofSeconds(musicSegSeconds * 2 + 8));
+        return session;
+    }
+
+    //single switch
+    public enum StreamKind { VIDEO, MUSIC }
+    public StreamSession start(StreamKind kind, String username, Path mediaFile) throws IOException {
+        return (kind == StreamKind.MUSIC) ? startMusic(username, mediaFile) : startVideo(username, mediaFile);
+    }
+
+    public StreamSession getSession(String sid) {
         Proc proc = sessions.get(sid);
         return proc == null ? null : proc.session();
     }
@@ -93,12 +78,11 @@ public class VideoService {
     public void stop(String sid) {
         Proc proc = sessions.remove(sid);
         if (proc == null) return;
-
         Process p = proc.process();
         try {
-            p.destroy();                                // ask nicely
+            p.destroy();
             if (!p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
-                p.destroyForcibly();                    // then force
+                p.destroyForcibly();
                 p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
             }
         } catch (InterruptedException ie) {
@@ -109,13 +93,76 @@ public class VideoService {
             }
         }
     }
-    
-    public void stopAllForUser(String username) {
-        var toStop = new java.util.ArrayList<String>();
-        sessions.forEach((sid, proc) -> {
-            if (proc.session().username().equals(username)) toStop.add(sid);
+
+    // ---------- INTERNALS (shared) ----------
+
+    private void stopAllForUser(String username) {
+        sessions.entrySet().removeIf(e -> {
+            if (username.equals(e.getValue().session().username())) {
+                try { stop(e.getKey()); } catch (Exception ignored) {}
+                return true;
+            }
+            return false;
         });
-        toStop.forEach(this::stop);
+    }
+
+    //compose & launch ffmpeg based on audioOnly flag
+    private void startFfmpegHls(Path mediaFile, StreamSession session, boolean audioOnly) throws IOException {
+        Path outDir = session.outDir();
+        Files.createDirectories(outDir);
+
+        Path indexFile = outDir.resolve("index.m3u8");
+        String segPattern = outDir.resolve("seg-%08d.ts").toString();
+
+        final List<String> cmd = audioOnly
+            ? List.of(
+                "ffmpeg", "-hide_banner", "-loglevel", "info",
+                "-re", "-i", mediaFile.toString(),
+                "-vn",                       // disable any video stream
+                "-map", "0:a:0",             // first audio stream
+                "-c:a", musicAudioCodec,     // e.g., aac
+                "-b:a", musicAudioBitrate,   // e.g., 128k
+                "-ar",  musicAudioRate,      // e.g., 48000
+                "-ac",  musicAudioChannels,  // e.g., 2
+                "-hls_time", Integer.toString(musicSegSeconds),
+                "-hls_list_size", Integer.toString(musicListSize),
+                "-hls_flags", "independent_segments+delete_segments",
+                "-start_number", "1",
+                "-hls_segment_filename", segPattern,
+                indexFile.toString()
+              )
+            : List.of(
+                "ffmpeg", "-hide_banner", "-loglevel", "info",
+                "-re", "-i", mediaFile.toString(),
+                "-map", "0:v:0", "-map", "0:a:0",
+                "-c:v", "libx264", "-profile:v", "main", "-level", "3.1", "-pix_fmt", "yuv420p",
+                "-r", "30", "-g", "120", "-keyint_min", "120", "-sc_threshold", "0",
+                "-x264-params", "repeat-headers=1:vbv-maxrate=2500:vbv-bufsize=5000", "-b:v", "2500k",
+                "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+                "-hls_time", "4", "-hls_list_size", "24",
+                "-hls_flags", "independent_segments+delete_segments",
+                "-start_number", "1",
+                "-hls_segment_filename", segPattern,
+                indexFile.toString()
+              );
+
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.redirectOutput(outDir.resolve("ffmpeg.out").toFile());
+        pb.redirectError(outDir.resolve("ffmpeg.err").toFile());
+        Process p = pb.start();
+
+        log.info("FFmpeg HLS started: kind={} sid={} outDir={} index={}",
+                 (audioOnly ? "music" : "video"), session.sid(), outDir, indexFile);
+
+        sessions.put(session.sid(), new Proc(session, p));
+
+        // sidecar subtitle for video
+        if (!audioOnly) {
+            new Thread(() -> {
+                try { extractSidecarSubtitles(mediaFile, outDir, (VideoSession) session); }
+                catch (Exception e) { log.warn("subs extract failed: {}", e.toString()); }
+            }, "subs-extract-" + session.sid()).start();
+        }
     }
     
     // Recursive delete helper
@@ -133,7 +180,7 @@ public class VideoService {
         });
     }
     
-    /** probe subtitle streams and extract text subs to WebVTT; write subs.json */
+    //Subtitle helper
     private void extractSidecarSubtitles(Path mediaFile, Path outDir, VideoSession session) throws IOException, InterruptedException {
         // 1) ffprobe JSON of subtitle streams (index, codec_name, language/title)
         List<String> probeCmd = List.of(
@@ -200,7 +247,7 @@ public class VideoService {
         }
     }
     
-    /** helper: wait for a process to exit with timeout */
+    //Exit time out
     private int waitForExit(Process p, Duration d) throws InterruptedException {
         if (p.waitFor(d.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) return p.exitValue();
         p.destroyForcibly();
@@ -260,7 +307,7 @@ public class VideoService {
     }
     
     //background class for deleting orphaned directories 
-    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 30_000) // every 30s
+    @Scheduled(fixedDelay = 30_000) // every 30s
     public void cleanupOrphans() {
         try (var dirs = java.nio.file.Files.list(java.nio.file.Paths.get(streamsDir))) {
             long now = System.currentTimeMillis();

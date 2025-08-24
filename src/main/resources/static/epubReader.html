@@ -1,174 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>ROM Emulator + Save Manager</title>
+  <meta charset="UTF-8" />
+  <title>EPUB Reader</title>
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      background-color: #111;
-      color: #eee;
-      padding: 1rem;
-    }
-    select, button {
-      background-color: #444;
-      color: white;
-      border: none;
-      padding: 0.5rem 1rem;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 1rem;
-      margin-top: 0.5rem;
-    }
-    button:hover {
-      background-color: #666;
-    }
-    #save-controls {
-      margin-bottom: 2rem;
-    }
-    #emulator-overlay {
-      display: none;
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      z-index: 9999;
-      align-items: center;
-      justify-content: center;
-    }
-    #emulator-overlay iframe {
+    #viewer {
       width: 100%;
-      height: 100%;
-      border: none;
-    }
-    #emulator-container {
+      height: 90vh;
+      border: 1px solid #ccc;
       position: relative;
-      width: 90%;
-      height: 90%;
+      background: white;
     }
-    #close-emulator {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      font-size: 1.5rem;
-      z-index: 10000;
+    #viewer iframe {
+      width: 100% !important;
+      height: 100% !important;
+      border: none !important;
+      display: block;
+    }
+    #controls {
+      margin: 10px 0;
+      text-align: center;
+    }
+    #controls button {
+      font-size: 1rem;
+      padding: 0.5em 1em;
+      margin: 0 1em;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h1>🕹 ROM Emulator + Save Manager</h1>
-  <p><button onclick="window.location.href='/'">Back to Home</button></p>
-
-  <div>
-    <label for="rom-select">🎮 Select ROM:</label>
-    <select id="rom-select"></select>
+  <h1>EPUB Reader</h1>
+  <div id="top-controls" style="margin-bottom: 10px; text-align: center;">
+    <a href="/"><button>Back to Library</button></a>
   </div>
-
-  <div id="save-controls">
-    <h2>💾 Save for: <span id="save-rom-name">Loading...</span></h2>
-
-    <p>
-      <a id="download-save" href="#" download>⬇️ Download Save File</a>
-    </p>
-
-    <form id="upload-save-form" enctype="multipart/form-data" method="post">
-      <input type="file" name="file" accept=".sav" required />
-      <button type="submit">⬆️ Upload Save File</button>
-      <span id="upload-status" style="margin-left: 1rem;"></span>
-    </form>
+  <div id="controls">
+    <button id="prevBtn" aria-label="Previous Page">Prev</button>
+    <button id="nextBtn" aria-label="Next Page">Next</button>
   </div>
+  <div id="viewer">Loading EPUB…</div>
 
-  <div id="emulator-overlay">
-    <div id="emulator-container">
-      <button id="close-emulator">✖</button>
-      <iframe id="emulator-frame" allowfullscreen></iframe>
-    </div>
-  </div>
-
-  <button id="emulator-button">▶️ Launch Emulator</button>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
   <script>
-    const origin         = window.location.origin;
-    const feedUrl        = `${origin}/feeds/user-feed.json`;
-    const romSelect      = document.getElementById("rom-select");
-    const romNameText    = document.getElementById("save-rom-name");
-    const uploadForm     = document.getElementById("upload-save-form");
-    const statusText     = document.getElementById("upload-status");
-    const downloadLink   = document.getElementById("download-save");
-    const emulatorBtn    = document.getElementById("emulator-button");
-    const overlay        = document.getElementById("emulator-overlay");
-    const closeBtn       = document.getElementById("close-emulator");
-    const iframe         = document.getElementById("emulator-frame");
+    const params = new URLSearchParams(window.location.search);
+    const file = params.get('file');
 
-    let currentRomProps = null;
+    if (!file) {
+      document.getElementById('viewer').innerText = 'No EPUB file specified.';
+    } else {
+      const url = '/epub/download?file=' + encodeURIComponent(file);
+      console.log('File param:', file);
+      console.log('EPUB fetch URL:', url);
 
-    async function loadFeed() {
-      const res = await fetch(feedUrl);
-      const feed = await res.json();
-
-      const roms = feed.categories[0].items;
-
-      roms.forEach((item, index) => {
-        const opt = document.createElement("option");
-        opt.value = index;
-        opt.textContent = item.title;
-        romSelect.appendChild(opt);
+      const book = ePub(url, {
+        openAs: "epub",
+        restore: false,
+        reload: false,
       });
 
-      setRom(roms[0]); // default first
-      romSelect.addEventListener("change", () => {
-        setRom(roms[romSelect.value]);
-      });
+      book.loaded.metadata.then(metadata => console.log("Metadata loaded:", metadata))
+        .catch(e => console.error("Metadata load error:", e));
+
+      book.loaded.navigation.then(nav => console.log("Navigation loaded", nav))
+        .catch(e => console.error("Navigation load error:", e));
+
+		let rendition;
+
+		book.ready.then(() => {
+		  console.log('Book ready');
+
+		  book.opened.then(() => console.log('Book opened'))
+		    .catch(e => console.error('book.opened error', e));
+
+		  // Clear the viewer content before rendering
+		  document.getElementById("viewer").innerHTML = "";
+
+		  rendition = book.renderTo("viewer", {
+		    width: "100%",
+		    height: "100%",
+		    flow: "scrolled"  // try scrolled for now
+		  });
+
+		  rendition.themes.select("override");
+
+		  rendition.on("rendered", section => console.log("Rendered section:", section.href));
+		  rendition.on("relocated", location => console.log("Relocated to", location));
+		  rendition.on("started", () => console.log("Rendition started"));
+		  rendition.on("layout", () => console.log("Layout updated"));
+		  rendition.on("displayError", err => {
+		    console.error("Display error:", err);
+		    document.getElementById("viewer").innerText = "Failed to display EPUB.";
+		  });
+
+		  rendition.display().then(() => {
+		    console.log("Rendition displayed");
+		  }).catch(err => {
+		    console.error("display() error:", err);
+		    document.getElementById("viewer").innerText = "Failed to display EPUB.";
+		  });
+
+		  document.getElementById('prevBtn').addEventListener('click', () => rendition.prev());
+		  document.getElementById('nextBtn').addEventListener('click', () => rendition.next());
+		});
     }
-
-    function setRom(rom) {
-      currentRomProps = rom.props;
-
-      romNameText.textContent = rom.title;
-
-      uploadForm.action = currentRomProps.save;
-      downloadLink.href = currentRomProps.save;
-
-      iframe.src = "about:blank"; // clear on switch
-    }
-
-    uploadForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const formData = new FormData(uploadForm);
-
-      try {
-        const response = await fetch(uploadForm.action, {
-          method: "POST",
-          body: formData
-        });
-
-        if (!response.ok) {
-          throw new Error(await response.text());
-        }
-
-        statusText.textContent = " Save uploaded!";
-        statusText.style.color = "lightgreen";
-      } catch (err) {
-        statusText.textContent = "❌ Upload failed: " + err.message;
-        statusText.style.color = "red";
-      }
-    });
-
-    emulatorBtn.addEventListener("click", () => {
-      iframe.src = `${origin}/webrcade/play/index.html?feed=${feedUrl}`;
-      overlay.style.display = "flex";
-    });
-
-    closeBtn.addEventListener("click", () => {
-      overlay.style.display = "none";
-      iframe.src = "about:blank";
-    });
-
-    iframe.onload  = () => console.log(" Emulator iframe loaded");
-    iframe.onerror = () => console.error("❌ Emulator iframe failed to load");
-
-    loadFeed();
   </script>
 </body>
 </html>

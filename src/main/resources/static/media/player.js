@@ -26,7 +26,7 @@
 
     if (state.sid) {
       try {
-        await fetch(`/video/hls/${encodeURIComponent(state.sid)}`, {
+        await fetch(`/media/hls/${encodeURIComponent(state.sid)}`, {
           method: 'DELETE',
           keepalive,                   // survives navigation/close
           credentials: 'same-origin',  // include cookies on unload
@@ -47,10 +47,10 @@
   }
   
   async function startvideoHls(filename) {
-    const res = await fetch('/video/hls', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) });
+    const res = await fetch('/media/hls', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename }) });
     if (!res.ok) throw new Error(`HLS start failed: ${res.status} ${res.statusText}`);
     const { m3u8, sessionId } = await res.json();
-    if (!m3u8 || !sessionId) throw new Error('Invalid response from /video/hls');
+    if (!m3u8 || !sessionId) throw new Error('Invalid response from /media/hls');
     return { m3u8, sessionId };
   }
 

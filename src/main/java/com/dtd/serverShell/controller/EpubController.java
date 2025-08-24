@@ -10,6 +10,9 @@ import org.springframework.http.HttpRange;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,91 +29,101 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @RestController
-@RequestMapping("/epubs")
+@RequestMapping("/epub")
+
 public class EpubController {
+    
+    @Value("${media.dir}")
+    private String mediaDir;
+    
+    private final Logger log = LoggerFactory.getLogger(EpubController.class);
 
-    private final Path baseDir;
-    private static final Logger log = LoggerFactory.getLogger(EpubController.class);
 
-    public EpubController(@Value("${media.dir}") String mediaDir) {
-        this.baseDir = Paths.get(mediaDir);
-    }
-
-    @GetMapping
-    public List<String> listEpubs() throws IOException {
-        try (Stream<Path> files = Files.walk(baseDir.resolve("Books"))) {
-            return files
-                    .filter(path -> path.toString().toLowerCase().endsWith(".epub"))
-                    .map(baseDir::relativize)
-                    .map(Path::toString)
-                    .collect(Collectors.toList());
-        }
-    }
 
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadEpub(
             @RequestParam String file,
-            @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader
-    ) throws IOException {
-        Path filePath = baseDir.resolve(file).normalize();
+            @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader) {
+        
+        // Authentication check
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
 
-        if (!filePath.startsWith(baseDir) || !Files.exists(filePath)) {
+        // Input validation
+        if (file == null || file.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Path traversal protection
+        Path mediaRoot = Paths.get(mediaDir).toAbsolutePath().normalize();
+        Path resolved = mediaRoot.resolve(file).normalize();
+        if (!resolved.startsWith(mediaRoot)) {
+            log.warn("Path traversal attempt: {}", file);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+
+        // Check file exists
+        if (!Files.exists(resolved)) {
             return ResponseEntity.notFound().build();
         }
 
-        long fileLength = Files.size(filePath);
-
-        // If no range header, serve first 64KB chunk to trigger range requests on client
-        if (rangeHeader == null) {
-            log.info("No Range header, serving full EPUB: {} ({} bytes)", file, fileLength);
-            InputStreamResource fullResource = new InputStreamResource(Files.newInputStream(filePath));
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                    .contentLength(fileLength)
-                    .contentType(MediaType.parseMediaType("application/epub+zip"))
-                    .body(fullResource);
-        }
-        // Range header present - parse and serve requested range
         try {
-            HttpRange httpRange = HttpRange.parseRanges(rangeHeader).get(0);
-            long start = httpRange.getRangeStart(fileLength);
-            long end = httpRange.getRangeEnd(fileLength);
-            long rangeLength = end - start + 1;
+            long fileLength = Files.size(resolved);
 
-            log.info("Range header: {} — serving bytes {} to {} ({} bytes)", rangeHeader, start, end, rangeLength);
-
-            InputStream inputStream = Files.newInputStream(filePath);
-
-            if (inputStream.skip(start) != start) {
-                log.warn("Unable to skip to requested start position in file");
-                return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE).build();
+            // If no range header, serve full file
+            if (rangeHeader == null) {
+                log.info("No Range header, serving full EPUB: {} ({} bytes)", file, fileLength);
+                InputStreamResource fullResource = new InputStreamResource(Files.newInputStream(resolved));
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                        .contentLength(fileLength)
+                        .contentType(MediaType.parseMediaType("application/epub+zip"))
+                        .body(fullResource);
             }
 
-            InputStreamResource resource = new InputStreamResource(new LimitedInputStream(inputStream, rangeLength));
+            // Range header present - parse and serve requested range
+            try {
+                HttpRange httpRange = HttpRange.parseRanges(rangeHeader).get(0);
+                long start = httpRange.getRangeStart(fileLength);
+                long end = httpRange.getRangeEnd(fileLength);
+                long rangeLength = end - start + 1;
 
-            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
-                    .header(HttpHeaders.CONTENT_TYPE, "application/epub+zip")
-                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                    .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(rangeLength))
-                    .header(HttpHeaders.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + fileLength)
-                    .body(resource);
+                log.info("Range header: {} — serving bytes {} to {} ({} bytes)", rangeHeader, start, end, rangeLength);
 
-        } catch (Exception e) {
-            log.error("Invalid Range header: {}", rangeHeader, e);
+                InputStream inputStream = Files.newInputStream(resolved);
+                if (inputStream.skip(start) != start) {
+                    log.warn("Unable to skip to requested start position in file");
+                    inputStream.close();
+                    return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE).build();
+                }
 
-            // Fall back: serve first 64KB chunk instead of whole file
-            InputStream inputStream = Files.newInputStream(filePath);
-            InputStreamResource resource = new InputStreamResource(new LimitedInputStream(inputStream, 64 * 1024));
+                InputStreamResource resource = new InputStreamResource(new LimitedInputStream(inputStream, rangeLength));
 
-            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
-                    .header(HttpHeaders.CONTENT_TYPE, "application/epub+zip")
-                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                    .header(HttpHeaders.CONTENT_RANGE, "bytes 0-" + (64 * 1024 - 1) + "/" + fileLength)
-                    .contentLength(64 * 1024)
-                    .body(resource);
+                return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                        .header(HttpHeaders.CONTENT_TYPE, "application/epub+zip")
+                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                        .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(rangeLength))
+                        .header(HttpHeaders.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + fileLength)
+                        .body(resource);
+
+            } catch (Exception e) {
+                log.error("Invalid Range header: {}", rangeHeader, e);
+                // Fall back to full file on range parsing errors
+                InputStreamResource resource = new InputStreamResource(Files.newInputStream(resolved));
+                return ResponseEntity.ok()
+                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                        .contentLength(fileLength)
+                        .contentType(MediaType.parseMediaType("application/epub+zip"))
+                        .body(resource);
+            }
+
+        } catch (IOException e) {
+            log.error("Error serving EPUB: {}", file, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-
     // Helper InputStream that limits bytes read to rangeLength
     private static class LimitedInputStream extends InputStream {
         private final InputStream delegate;
