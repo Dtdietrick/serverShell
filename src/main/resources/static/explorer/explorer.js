@@ -208,8 +208,19 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
     }
 	//video & audio to embedded player 
 	else {
-          setCurrentPath(fullPath); 
-          li.onclick = () => AppPlayer.playMedia(fullPath)
+      setCurrentPath(fullPath); 
+      li.onclick = () =>{
+		AppPlayer.playMedia(fullPath);
+		
+		//Video label
+		const parts = fullPath.split('/');
+		const filename = parts[parts.length - 1];
+	
+		const viewerHeader = document.querySelector('#viewer-player h3');
+		if (viewerHeader) {
+		  viewerHeader.textContent = filename;
+		}	
+	  }; 
     }
 
     ul.appendChild(li);

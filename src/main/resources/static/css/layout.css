@@ -2,7 +2,10 @@
   display: flex;
   align-items: flex-start;
   gap: 2rem;
+  color-scheme: dark;
+  background-color: var(--surface-0); 
 }
+
 
 #mediaTree {
   flex: 1;

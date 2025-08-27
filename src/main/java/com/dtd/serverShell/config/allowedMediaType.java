@@ -12,7 +12,7 @@ public class allowedMediaType{
     private static final Logger log = LoggerFactory.getLogger(allowedMediaType.class);
     
     public static final List<String> SUPPORTED_EXTENSIONS = List.of(
-            ".mp3", ".mp4", ".mkv", ".webm",".m3u", ".epub"
+            ".mp3", ".mp4", ".avi", ".mkv", ".webm",".m3u", ".epub"
         );
 
     

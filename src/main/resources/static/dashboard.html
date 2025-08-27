@@ -46,7 +46,8 @@
           const a = document.createElement('a');
 
           a.href = `/index.html?jumpTo=${encodeURIComponent(item)}`;
-          a.textContent = item;
+		  const parts = item.split('/');
+		  a.textContent = parts[parts.length - 1];
 
           li.appendChild(a);
           viewsList.appendChild(li);

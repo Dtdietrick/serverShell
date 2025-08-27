@@ -2,7 +2,6 @@
 
 /* Visual styling for pinned launcher */
 #pinned-launchers {
-  background-color: var(--background-secondary, #f4f4f4);
   border-bottom: 1px solid #ccc;
   font-size: 0.9rem;
 }

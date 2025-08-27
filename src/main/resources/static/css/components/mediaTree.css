@@ -5,7 +5,6 @@
   padding: 0.5rem;
   box-sizing: border-box;
   border-right: 1px solid #ccc;
-  background: #fafafa;
 }
 
 #mediaTree ul {
@@ -22,7 +21,6 @@ li {
   border: 2px solid #aaa;
   border-radius: 8px;
   padding: 0.5rem;
-  background: #fff;
   text-align: left;
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
   transition: transform 0.1s ease;
@@ -32,7 +30,6 @@ li {
   max-width: 100%;
   word-break: break-word;
   overflow-wrap: break-word;
-  white-space: normal;
   margin: 0.5rem 0;
 }
 
@@ -51,7 +48,6 @@ li span,
   flex-shrink: 0;
   word-break: break-word;
   overflow-wrap: break-word;
-  white-space: normal;
 }
 
 /* Icons */

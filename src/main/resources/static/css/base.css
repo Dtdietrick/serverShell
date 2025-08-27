@@ -4,6 +4,7 @@
   font-family: 'Yrsa';
   src: url('/fonts/Yrsa-Regular.ttf') format('ttf');
   font-weight: normal;
+  color: #FFFFFF;
   font-style: normal;
 }
 
@@ -32,8 +33,7 @@
 body {
   font-family: 'Yrsa', system-ui;
   font-size: 20px;
-  color: #000000;
-  background-color: #121212;
+  background-color: #000000;
   line-height: 1.5;
   margin: 0;
   padding: 0;

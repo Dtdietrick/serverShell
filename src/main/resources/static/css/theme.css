@@ -5,4 +5,37 @@
   --shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
   --primary-color: #333;
   --accent-color: orange;
+  --pico-text-color: #FFFFFF;
+  /* Dark theme tokens */
+  --surface-0: #0f1115;   
+  --surface-1: #151922;   
+  --surface-2: #1b2030;  
+
+  --border-dark: rgba(255,255,255,0.08);
+  --border-light: rgba(255, 255, 255, 0.3);
+  --muted: rgba(255,255,255,0.85);
+}
+
+#main-layout {
+  /* Pico-driven text tokens */
+  --pico-color: #e8e8e8;        /* primary text used by h1–h6 and body */
+  --pico-muted-color: #c7c7c7;  /* secondary text */
+
+  /* Headings (optional but keeps them brighter) */
+  --pico-h1-color: #f5f5f5;
+  --pico-h2-color: #f2f2f2;
+  --pico-h3-color: #efefef;
+}
+
+/* Fallback to catch anything not reading the variables */
+#main-layout,
+#main-layout p,
+#main-layout li,
+#main-layout h1,
+#main-layout h2,
+#main-layout h3,
+#main-layout h4,
+#main-layout h5,
+#main-layout h6 {
+  color: var(--pico-color);
 }

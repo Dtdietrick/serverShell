@@ -9,16 +9,12 @@ export function handleJumpParam() {
 
   if (!jumpTo) return;
 
-  if (jumpTo.endsWith(".mp4") || jumpTo.endsWith(".epub")) {
-    const parts = jumpTo.split("/");
-    const file = parts.pop();
-    const folder = parts.join("/");
+  const parts = jumpTo.split("/");
+  const file = parts.pop();
+  const folder = parts.join("/");
 
-    setTimeout(() => {
-      renderFolder(folder);
-      AppPlayer.playMedia(jumpTo);
-    }, 500); // Or shorter if renderFolder is fast
-  } else {
-    renderFolder(jumpTo);
-  }
+  setTimeout(() => {
+    renderFolder(folder);
+    AppPlayer.playMedia(jumpTo);
+  }, 500); // Or shorter if renderFolder is fast
 }
