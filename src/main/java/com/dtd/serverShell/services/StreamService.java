@@ -17,20 +17,19 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 
-import com.dtd.serverShell.model.MusicSession;   // [added]
-import com.dtd.serverShell.model.StreamSession;  // [added]
+import com.dtd.serverShell.model.MusicSession;   
+import com.dtd.serverShell.model.StreamSession; 
 import com.dtd.serverShell.model.VideoSession;  
 @Service
 public class StreamService {
     private static final Logger log = LoggerFactory.getLogger(StreamService.class);
 
     // base path and url for streams
-    @Value("${streams.dir}") private String streamsDir; // FS
+    @Value("${streams.dir}") private String streamsDir; 
     @Value("${streams.baseUrl:/streams}") private String streamsBaseUrl;
 
     private final Map<String, Proc> sessions = new ConcurrentHashMap<>();
 
-    // [VideoService.java] CHANGED: Proc now stores StreamSession, not VideoSession
     private record Proc(StreamSession session, Process process) {}
     
     @Value("${music.hls.segment.seconds:4}")   private int musicSegSeconds;
@@ -45,11 +44,11 @@ public class StreamService {
 
     //video
     public VideoSession startVideo(String username, Path mediaFile) throws IOException {
-        stopAllForUser(username); // keep your one-session-per-user behavior
+        stopAllForUser(username); 
         String sid = UUID.randomUUID().toString();
         VideoSession session = new VideoSession(sid, username, Paths.get(streamsDir), streamsBaseUrl);
         startFfmpegHls(mediaFile, session, /*audioOnly*/ false);
-        waitForPlayableManifest(session.outDir().resolve("index.m3u8"), 2, Duration.ofSeconds(4 * 2 + 8));
+        waitForPlayableManifest(session.outDir().resolve("index.m3u8"), 4, Duration.ofSeconds(4 * 2 + 8));
         return session;
     }
 
@@ -59,7 +58,6 @@ public class StreamService {
         String sid = UUID.randomUUID().toString();
         MusicSession session = new MusicSession(sid, username, Paths.get(streamsDir), streamsBaseUrl);
         startFfmpegHls(mediaFile, session, /*audioOnly*/ true);
-        // Music HLS readiness derived from musicSegSeconds/musicListSize, but 2 segments is usually enough
         waitForPlayableManifest(session.outDir().resolve("index.m3u8"), 2, Duration.ofSeconds(musicSegSeconds * 2 + 8));
         return session;
     }
@@ -120,10 +118,10 @@ public class StreamService {
                 "-re", "-i", mediaFile.toString(),
                 "-vn",                       // disable any video stream
                 "-map", "0:a:0",             // first audio stream
-                "-c:a", musicAudioCodec,     // e.g., aac
-                "-b:a", musicAudioBitrate,   // e.g., 128k
-                "-ar",  musicAudioRate,      // e.g., 48000
-                "-ac",  musicAudioChannels,  // e.g., 2
+                "-c:a", musicAudioCodec,     //some tweaked settings for audio only
+                "-b:a", musicAudioBitrate,   
+                "-ar",  musicAudioRate,      
+                "-ac",  musicAudioChannels,  
                 "-hls_time", Integer.toString(musicSegSeconds),
                 "-hls_list_size", Integer.toString(musicListSize),
                 "-hls_flags", "independent_segments+delete_segments",
@@ -312,7 +310,7 @@ public class StreamService {
         try (var dirs = java.nio.file.Files.list(java.nio.file.Paths.get(streamsDir))) {
             long now = System.currentTimeMillis();
             dirs.filter(java.nio.file.Files::isDirectory).forEach(dir -> {
-                // if not tracked or process is dead AND older than 2 minutes → delete
+                // if not tracked or process is dead AND older than 2 minutes -> delete
                 boolean tracked = sessions.values().stream().anyMatch(p -> p.session().outDir().equals(dir));
                 if (!tracked) {
                     try {
