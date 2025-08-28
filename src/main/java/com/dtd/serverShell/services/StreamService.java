@@ -43,13 +43,23 @@ public class StreamService {
         return startVideo(username, mediaFile);
     }
 
-    //video
+    //video full VOD, no live stream mess
     public VideoSession startVideo(String username, Path mediaFile) throws IOException {
-        stopAllForUser(username); // keep your one-session-per-user behavior
+        stopAllForUser(username);
         String sid = UUID.randomUUID().toString();
         VideoSession session = new VideoSession(sid, username, Paths.get(streamsDir), streamsBaseUrl);
+
         startFfmpegHls(mediaFile, session, /*audioOnly*/ false);
-        waitForPlayableManifest(session.outDir().resolve("index.m3u8"), 2, Duration.ofSeconds(4 * 2 + 8));
+
+        //.m4s segs not ts for better seeking control
+        waitForPlayableManifest(
+                session.outDir(),
+                "index.m3u8",
+                "seg-*.m4s",
+                /*minSegments=*/2,
+                /*hlsTimeSeconds=*/4,
+                /*extraSlackSeconds=*/6
+        );
         return session;
     }
 
@@ -59,8 +69,15 @@ public class StreamService {
         String sid = UUID.randomUUID().toString();
         MusicSession session = new MusicSession(sid, username, Paths.get(streamsDir), streamsBaseUrl);
         startFfmpegHls(mediaFile, session, /*audioOnly*/ true);
-        // Music HLS readiness derived from musicSegSeconds/musicListSize, but 2 segments is usually enough
-        waitForPlayableManifest(session.outDir().resolve("index.m3u8"), 2, Duration.ofSeconds(musicSegSeconds * 2 + 8));
+       
+        waitForPlayableManifest(
+                session.outDir(),
+                "index.m3u8",
+                "seg-*.m4s",
+                /*minSegments=*/2,
+                /*hlsTimeSeconds=*/musicSegSeconds,
+                /*extraSlackSeconds=*/6
+            );
         return session;
     }
 
@@ -108,53 +125,55 @@ public class StreamService {
 
     //compose & launch ffmpeg based on audioOnly flag
     private void startFfmpegHls(Path mediaFile, StreamSession session, boolean audioOnly) throws IOException {
-        Path outDir = session.outDir();
+        final Path outDir = session.outDir();
         Files.createDirectories(outDir);
+        if (!Files.isWritable(outDir)) throw new IOException("Out dir not writable: " + outDir);
 
-        Path indexFile = outDir.resolve("index.m3u8");
-        String segPattern = outDir.resolve("seg-%08d.ts").toString();
+        final Path indexPath = outDir.resolve("index.m3u8");
+        final Path segPath   = outDir.resolve("seg-%08d.m4s");
+        final String indexFileStr = indexPath.toString();
+        final String segPatternStr = segPath.toString();
 
+        //full VOD loading logic
         final List<String> cmd = audioOnly
-            ? List.of(
-                "ffmpeg", "-hide_banner", "-loglevel", "info",
-                "-re", "-i", mediaFile.toString(),
-                "-vn",                       // disable any video stream
-                "-map", "0:a:0",             // first audio stream
-                "-c:a", musicAudioCodec,     // e.g., aac
-                "-b:a", musicAudioBitrate,   // e.g., 128k
-                "-ar",  musicAudioRate,      // e.g., 48000
-                "-ac",  musicAudioChannels,  // e.g., 2
-                "-hls_time", Integer.toString(musicSegSeconds),
-                "-hls_list_size", Integer.toString(musicListSize),
-                "-hls_flags", "independent_segments+delete_segments",
-                "-start_number", "1",
-                "-hls_segment_filename", segPattern,
-                indexFile.toString()
-              )
-            : List.of(
-                "ffmpeg", "-hide_banner", "-loglevel", "info",
-                "-re", "-i", mediaFile.toString(),
-                "-map", "0:v:0", "-map", "0:a:0",
-                "-c:v", "libx264", "-profile:v", "main", "-level", "3.1", "-pix_fmt", "yuv420p",
-                "-r", "30", "-g", "120", "-keyint_min", "120", "-sc_threshold", "0",
-                "-x264-params", "repeat-headers=1:vbv-maxrate=2500:vbv-bufsize=5000", "-b:v", "2500k",
-                "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
-                "-hls_time", "4", "-hls_list_size", "24",
-                "-hls_flags", "independent_segments+delete_segments",
-                "-start_number", "1",
-                "-hls_segment_filename", segPattern,
-                indexFile.toString()
-              );
+                ? List.of(
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "info",
+                    "-i", mediaFile.toString(),
+                    "-vn",
+                    "-map", "0:a:0",
+                    "-c:a", musicAudioCodec, "-b:a", musicAudioBitrate, "-ar", musicAudioRate, "-ac", musicAudioChannels,
+                    "-hls_time", Integer.toString(musicSegSeconds),
+                    "-hls_segment_type", "fmp4",
+                    "-hls_flags", "independent_segments+temp_file",
+                    "-hls_playlist_type", "vod",
+                    "-start_number", "1",
+                    "-hls_segment_filename", segPatternStr,
+                    indexFileStr
+                  )
+                : List.of(
+                    "ffmpeg", "-y", "-hide_banner", "-loglevel", "info",
+                    "-i", mediaFile.toString(),
+                    "-map", "0:v:0", "-map", "0:a:0",
+                    "-c:v", "libx264", "-profile:v", "main", "-level", "3.1", "-pix_fmt", "yuv420p",
+                    "-r", "30", "-g", "120", "-keyint_min", "120", "-sc_threshold", "0",
+                    "-x264-params", "repeat-headers=1:vbv-maxrate=2500:vbv-bufsize=5000", "-b:v", "2500k",
+                    "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+                    "-hls_time", "8",
+                    "-hls_segment_type", "fmp4",
+                    "-hls_flags", "independent_segments+temp_file",
+                    "-hls_playlist_type", "vod",
+                    "-start_number", "1",
+                    "-hls_segment_filename", segPatternStr,
+                     indexFileStr
+                  );
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectOutput(outDir.resolve("ffmpeg.out").toFile());
+        pb.directory(outDir.toFile());
         pb.redirectError(outDir.resolve("ffmpeg.err").toFile());
-        Process p = pb.start();
+        pb.redirectOutput(outDir.resolve("ffmpeg.out").toFile());
+        Process proc = pb.start();
 
-        log.info("FFmpeg HLS started: kind={} sid={} outDir={} index={}",
-                 (audioOnly ? "music" : "video"), session.sid(), outDir, indexFile);
-
-        sessions.put(session.sid(), new Proc(session, p));
+        sessions.put(session.sid(), new Proc(session, proc));
 
         // sidecar subtitle for video
         if (!audioOnly) {
@@ -278,51 +297,75 @@ public class StreamService {
         return 0; // fallback
     }
     
-    private void waitForPlayableManifest(Path indexFile, int minSegments, Duration timeout) throws IOException {
-        final long deadline = System.nanoTime() + timeout.toNanos();
-        int lastCount = -1;
+ // Passive wait - just wait for FFmpeg process to complete
+    private void waitForPlayableManifest(Path outDir,
+                                         String indexName,
+                                         String segGlob,
+                                         int minSegments,
+                                         int hlsTimeSeconds,
+                                         int extraSlackSeconds) throws IOException {
+        final Path indexPath = outDir.resolve(indexName);
+        
+        log.info("Waiting for VOD encoding to complete: {}", indexPath);
 
-        while (System.nanoTime() < deadline) {
-            if (Files.exists(indexFile)) {
-                long size = Files.size(indexFile);
-                if (size > 64) { // not just "#EXTM3U"
-                    String m3u8 = Files.readString(indexFile);
-                    // Count segments
-                    int segCount = Math.max(0, m3u8.split("#EXTINF:", -1).length - 1);
-                    if (segCount >= minSegments) return;
-
-                    // (optional) low-noise progress logging while bringing it up
-                    if (segCount != lastCount) {
-                        lastCount = segCount;
-                        // log.debug("HLS manifest warming up: {} EXTINF so far (need {})", segCount, minSegments);
-                    }
-                }
-            }
-            try { Thread.sleep(150); } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Interrupted while waiting for HLS manifest", ie);
+        // Find the FFmpeg process for this directory
+        Process ffmpegProcess = null;
+        String sessionId = null;
+        for (var entry : sessions.entrySet()) {
+            if (entry.getValue().session().outDir().equals(outDir)) {
+                ffmpegProcess = entry.getValue().process();
+                sessionId = entry.getKey();
+                break;
             }
         }
-        throw new IOException("Timed out waiting for playable HLS manifest: " + indexFile);
-    }
-    
-    //background class for deleting orphaned directories 
-    @Scheduled(fixedDelay = 30_000) // every 30s
-    public void cleanupOrphans() {
-        try (var dirs = java.nio.file.Files.list(java.nio.file.Paths.get(streamsDir))) {
-            long now = System.currentTimeMillis();
-            dirs.filter(java.nio.file.Files::isDirectory).forEach(dir -> {
-                // if not tracked or process is dead AND older than 2 minutes → delete
-                boolean tracked = sessions.values().stream().anyMatch(p -> p.session().outDir().equals(dir));
-                if (!tracked) {
-                    try {
-                        long ageMs = now - java.nio.file.Files.getLastModifiedTime(dir).toMillis();
-                        if (ageMs > 120_000) deleteRecursive(dir);
-                    } catch (Exception ignored) {}
+
+        if (ffmpegProcess == null) {
+            throw new IOException("No FFmpeg process found for directory: " + outDir);
+        }
+
+        try {
+            // Just wait for FFmpeg to finish - no constant filesystem hammering
+            long startTime = System.currentTimeMillis();
+            
+            while (ffmpegProcess.isAlive()) {
+                // Log progress every 30 seconds without filesystem I/O
+                long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+                if (elapsed > 0 && elapsed % 30 == 0) {
+                    log.info("VOD encoding in progress... ({}s elapsed)", elapsed);
+                    Thread.sleep(1000); // Sleep 1s after logging to avoid duplicate messages
+                } else {
+                    Thread.sleep(5000); // Check process every 5 seconds
                 }
-            });
-        } catch (Exception e) {
-            log.debug("cleanupOrphans skipped: {}", e.toString());
+                
+                // Safety timeout - 15 minutes max
+                if (elapsed > 900) { // 15 minutes
+                    ffmpegProcess.destroyForcibly();
+                    throw new IOException("FFmpeg process timed out after 15 minutes");
+                }
+            }
+
+            // Process finished - check exit code
+            int exitCode = ffmpegProcess.exitValue();
+            if (exitCode != 0) {
+                throw new IOException("FFmpeg failed with exit code: " + exitCode);
+            }
+
+            log.info("FFmpeg encoding completed, checking for playlist...");
+
+            // Now do a single check for the completed playlist
+            if (Files.exists(indexPath)) {
+                String content = Files.readString(indexPath);
+                if (content.contains("#EXTM3U") && content.contains("#EXT-X-ENDLIST")) {
+                    log.info("Complete VOD playlist ready");
+                    return; // SUCCESS
+                }
+            }
+
+            throw new IOException("FFmpeg completed but no valid VOD playlist found at: " + indexPath);
+            
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for FFmpeg", ie);
         }
     }
 }

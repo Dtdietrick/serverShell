@@ -122,7 +122,7 @@ WantedBy=multi-user.target
 - [✅] Search bar (v0.1.4)
 - [✅] fix back button on virtual directories (v0.1.5)
 - [✅] current file banner (v0.1.5)
-- [✅] GameBoy Emulator functionality (v0.1.6-v1.0.0)
+- [✅] GameBoy Emulator functionality (v0.1.6-v1.0.0.1)
 - [✅] beautify UI - part 2 (v1.0.0.1)
 - [✅] back button overhaul (v1.0.0.1)
 - [✅] js and css refactor (v1.0.0.1)
@@ -137,6 +137,10 @@ WantedBy=multi-user.target
 - [✅] NEW AUDIO [stable: (stream / emulator) audio stack & emulator rewrite] (v1.0.0.6)
 - [✅] Audio Only Stream Tweak (v1.0.0.7)
 - [✅] Ereader fix [revert] (v1.0.0.7)
+- [✅] dark style quickfix (v1.0.0.8)
+- [✅] Full VOD stream (v1.0.0.8)
+- [✅] Initial N64 Emulator setup (v1.0.0.8) 
+- [ ] Full N64 Emulator functionality
 - [ ] ESLint/Checkstyle
 - [ ] gba custom controls
 - [ ] User favorite playlist
@@ -147,7 +151,7 @@ WantedBy=multi-user.target
 - [ ] logup service 
 - [ ] split out services into microservices
 - [ ] user media request service
-- [ ] N64 Emulator functionality
+
 - [ ] beautify UI - part 3
 - [ ] Self.pentest
 - [ ] 

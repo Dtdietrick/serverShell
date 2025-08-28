@@ -47,7 +47,7 @@ public class EmulatorController {
     
     @Value("${retroarch.image}")
     private String retroImage;
-
+    
     private static final Logger log = LoggerFactory.getLogger(EmulatorController.class);
     
     private static final class UserPaths {
@@ -138,11 +138,16 @@ public class EmulatorController {
                 return errorResponse("[PULSE AUDIO ERR] Prod audio requires /run/user/<uid>/pulse/native (got: " + pulseSocketPath + ")");
             }
                        
+            //chose core
+            String coreEmulator = (rom.endsWith(".gb") || rom.endsWith(".gba"))
+                    ? "mgba_libretro.so"
+                    : "mupen64plus_next_libretro.so";
+            
             //name for later cleanup
             String containerName = "emulator-" + username + "-" + vncPort;
             cmd.addAll(List.of("--name", containerName));
             // set ROM
-            cmd.addAll(List.of(retroImage, rom));
+            cmd.addAll(List.of(retroImage, rom, coreEmulator));
             //run command
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.inheritIO();
