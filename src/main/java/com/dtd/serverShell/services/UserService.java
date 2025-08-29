@@ -36,14 +36,24 @@ public class UserService {
         return true;
     }
     
-    public void recordView(String username, String filename) {
+    private static String normalizeRecentPath(String p) {
+        if (p == null) return null;
+        String s = p.replace('\\', '/');
+        if (s.endsWith("/index.m3u8")) s = s.substring(0, s.length() - "/index.m3u8".length());
+        if (s.endsWith("/"))          s = s.substring(0, s.length() - 1);
+        return s;
+    }
+
+    public void recordView(String username, String filenameOrFolder) {
+        final String key = normalizeRecentPath(filenameOrFolder);
+
         Optional<AppUser> userOpt = userRepository.findByUsername(username);
         userOpt.ifPresent(user -> {
             List<String> history = user.getRecentViews();
             if (history == null) history = new ArrayList<>();
 
-            history.remove(filename); // Remove if already in list
-            history.add(0, filename); // Add to front
+            history.remove(key);
+            history.add(0, key);
             if (history.size() > 10) {
                 history = history.subList(0, 10);
             }

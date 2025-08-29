@@ -110,6 +110,26 @@ public class MediaController {
                     .path(remainder)                    // e.g. Movies/Files/index.m3u8
                     .toUriString();
 
+            String folderRel;
+            if (remainder.endsWith("/index.m3u8")) {
+                folderRel = remainder.substring(0, remainder.length() - "/index.m3u8".length());
+            } else {
+                // if caller gave folder, ensure it's folder-like
+                folderRel = remainder.endsWith("/") ? remainder.substring(0, remainder.length() - 1) : remainder;
+                // If remainder is a file (rare), fall back to parent
+                if (!folderRel.isEmpty() && folderRel.contains("/") && !folderRel.equals(remainder)) {
+                    // ok
+                } else {
+                    folderRel = mediaRoot.relativize(manifest.getParent()).toString().replace('\\', '/');
+                }
+            }
+            
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
+                String username = auth.getName();
+                userProfileService.recordView(username, folderRel); // <-- inject this service
+            }
+            
             log.info("[VOD] Resolved manifest: {} -> {}", manifest, url);
             return ResponseEntity.ok(Map.of("m3u8", url));
         } catch (IOException e) {
