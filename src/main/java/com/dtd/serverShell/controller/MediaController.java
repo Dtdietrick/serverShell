@@ -13,8 +13,11 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.dtd.serverShell.config.allowedMediaType;
@@ -52,6 +56,7 @@ public class MediaController {
     private final AntPathMatcher pathMatcher = new AntPathMatcher(); // Used for pattern matching URI paths
     private final UserService userProfileService;
     private final StreamService stream;
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
     
     public MediaController(MediaService mediaService, UserService userProfileService, allowedMediaType allowedmediaType,StreamService stream) {
         this.mediaService = mediaService;
@@ -92,6 +97,75 @@ public class MediaController {
         return allowedMediaType.SUPPORTED_EXTENSIONS;
     }
     
+    @PostMapping("/vod")
+    public ResponseEntity<Map<String, String>> startVod(@RequestBody Map<String, String> payload) {
+        String rel = payload == null ? null : payload.get("path");
+        try {
+            Path manifest = mediaService.resolveVodManifest(rel);
+
+            // Build a URL to our static-file passthrough below
+            // We’ll serve via /media/vod/fs/** which maps inside mediaDir
+            Path mediaRoot = Paths.get(mediaDir).toAbsolutePath().normalize();
+            String remainder = mediaRoot.relativize(manifest).toString().replace('\\', '/');
+
+            String url = ServletUriComponentsBuilder
+                    .fromCurrentContextPath()
+                    .path("/media/vod/fs/")
+                    .path(remainder)                    // e.g. Movies/Files/index.m3u8
+                    .toUriString();
+
+            log.info("[VOD] Resolved manifest: {} -> {}", manifest, url);
+            return ResponseEntity.ok(Map.of("m3u8", url));
+        } catch (IOException e) {
+            log.error("[VOD] {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    @GetMapping("/vod/fs/**")
+    public ResponseEntity<FileSystemResource> serveVodAsset(HttpServletRequest req) {
+        try {
+            String full    = (String) req.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
+            String pattern = (String) req.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+            String tail    = PATH_MATCHER.extractPathWithinPattern(pattern, full);
+
+            String decodedTail = URLDecoder.decode(tail, StandardCharsets.UTF_8);
+            
+            Path mediaRoot = Paths.get(mediaDir).toAbsolutePath().normalize();
+            Path file      = mediaRoot.resolve(decodedTail).normalize();
+
+            if (!file.startsWith(mediaRoot) || !Files.isRegularFile(file)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            // Lightweight content-type mapping
+            String name = file.getFileName().toString().toLowerCase();
+            MediaType type;
+            if (name.endsWith(".m3u8")) {
+                // HLS manifest
+                type = MediaType.parseMediaType("application/vnd.apple.mpegurl");
+            } else if (name.endsWith(".m4s")) {
+                // HLS fMP4 segment
+                // Some players prefer application/octet-stream; both generally work.
+                type = MediaType.APPLICATION_OCTET_STREAM;
+            } else if (name.endsWith(".mp4")) {
+                type = MediaType.valueOf("video/mp4");
+            } else {
+                type = MediaType.APPLICATION_OCTET_STREAM;
+            }
+
+            FileSystemResource resource = new FileSystemResource(file.toFile());
+            return ResponseEntity.ok()
+                    .contentType(type)
+                    .cacheControl(CacheControl.noCache()) // VOD index often updates during encode; safe default
+                    .body(resource);
+
+        } catch (Exception e) {
+            log.error("[VOD/fs] {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    //live stream logic (deprecated)
     @PostMapping("/hls")
     public ResponseEntity<Map<String, String>> start(@RequestBody Map<String, String> payload) throws IOException {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

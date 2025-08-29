@@ -82,6 +82,35 @@ public class MediaService {
         }
     }
     
+    
+    public Path resolveVodManifest(String relativePath) throws IOException {
+        if (relativePath == null || relativePath.isBlank()) {
+            throw new IOException("Empty path");
+        }
+
+        Path mediaRoot  = Paths.get(mediaDir).toAbsolutePath().normalize();
+        Path candidate  = mediaRoot.resolve(relativePath).normalize();
+
+        // Security: must remain inside media root
+        if (!candidate.startsWith(mediaRoot)) {
+            throw new IOException("Path escapes media root");
+        }
+
+        // If they passed a directory, look for index.m3u8 inside it
+        if (Files.isDirectory(candidate)) {
+            Path idx = candidate.resolve("index.m3u8");
+            if (Files.isRegularFile(idx)) return idx;
+            throw new IOException("index.m3u8 not found in directory: " + candidate);
+        }
+
+        // If they passed a file, it must be index.m3u8
+        if (Files.isRegularFile(candidate) && candidate.getFileName().toString().equals("index.m3u8")) {
+            return candidate;
+        }
+
+        throw new IOException("Not a playable manifest path: " + candidate);
+    }
+    
     // List all playlist names (without .m3u extension) in the playlists subfolder of mediaDir
     public List<String> listPlaylists() {
         List<String> names = new ArrayList<>();

@@ -197,8 +197,9 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
     const li = document.createElement("li");
 
     li.classList.add("file");
-    li.textContent = fileName;
 	const fullPath = filePath.startsWith(prefix) ? filePath : prefix + filePath;
+	const display = displayNameFor(fullPath);
+    li.textContent = display;
 	
 	 //Epub goes to the epub.html - no current path
 	 if (fileName.toLowerCase().endsWith(".epub")) {	
@@ -212,14 +213,9 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
       li.onclick = () =>{
 		AppPlayer.playMedia(fullPath);
 		
-		//Video label
-		const parts = fullPath.split('/');
-		const filename = parts[parts.length - 1];
-	
+		//Video Viewer label
 		const viewerHeader = document.querySelector('#viewer-player h3');
-		if (viewerHeader) {
-		  viewerHeader.textContent = filename;
-		}	
+		if (viewerHeader) viewerHeader.textContent = display;	
 	  }; 
     }
 
@@ -229,6 +225,17 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
   return ul;
 }
 
+//helps track a name to display for the file
+function displayNameFor(path) {
+  const parts = (path || "").split("/").filter(Boolean);
+  if (parts.length === 0) return path || "";
+  const last = parts[parts.length - 1].toLowerCase();
+  if (last === "index.m3u8") {
+    // parent folder name, e.g. ".../Heavy Metal/index.m3u8" → "Heavy Metal"
+    return parts.length >= 2 ? parts[parts.length - 2] : "Video";
+  }
+  return parts[parts.length - 1];
+}
 // Toggle visibility of search bar based on whether we're at the root
 export function updateSearchVisibility() {
   const searchInput = document.getElementById("media-search");

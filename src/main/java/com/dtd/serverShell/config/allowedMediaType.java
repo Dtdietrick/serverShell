@@ -11,10 +11,13 @@ import org.springframework.stereotype.Service;
 public class allowedMediaType{
     private static final Logger log = LoggerFactory.getLogger(allowedMediaType.class);
     
-    public static final List<String> SUPPORTED_EXTENSIONS = List.of(
-            ".mp3", ".mp4", ".avi", ".mkv", ".webm",".m3u", ".epub"
-        );
+//    public static final List<String> SUPPORTED_EXTENSIONS = List.of(
+//            ".mp3", ".mp4", ".avi", ".mkv", ".webm",".m3u", ".epub"
+//        );
 
+    public static final List<String> SUPPORTED_EXTENSIONS = List.of(
+            ".m3u8", ".epub"
+        );
     
     public static MediaType getMediaType(String filename) {
         String lower = filename.toLowerCase();
