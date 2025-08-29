@@ -1,18 +1,17 @@
 
 (function () {
-  // [player.js] keep a single Hls.js instance and a tiny runtime state
+	
   let hls = null;
   const state = { m3u8: null, video: null };
 
-  // [player.js] unchanged: helper to absolutize URLs if needed
   function toAbsolute(url) {
     if (!url) return url;
-    if (/^https?:\/\//i.test(url)) return url; // already absolute
+    if (/^https?:\/\//i.test(url)) return url; 
     if (!url.startsWith('/')) url = '/' + url;
     return window.location.origin + url;
   }
 
-  // [player.js] simplified: stop only media; NO DELETE to backend (no sessions anymore)
+  // stop only media; NO DELETE
   async function stopAllMedia() {
     try {
       if (hls) {
@@ -29,7 +28,7 @@
     state.m3u8 = null;
   }
 
-  // [player.js] NEW: ask backend to resolve a ready-made VOD manifest
+  //resolve VOD manifest
   async function startVod(pathOrFolder) {
     const res = await fetch('/media/vod', {
       method: 'POST',
@@ -43,7 +42,7 @@
     return { m3u8 };
   }
 
-  // [player.js] REPLACED: removed session-based HLS start + waitForPlayableManifest
+  // no session/live stream logic - full VOD stream
   async function playMedia(filenameOrFolder) {
     await stopAllMedia();
 
@@ -54,20 +53,20 @@
     container.innerHTML = `<div style="opacity:.7">Loading <b>${name}</b>…</div>`;
 
     try {
-      // [player.js] Resolve VOD manifest from folder or direct index.m3u8 path
+      //Resolve VOD manifest from folder or direct index.m3u8 path
       const { m3u8 } = await startVod(filenameOrFolder);
       const absM3u8 = toAbsolute(m3u8);
-      // Small cache-buster to avoid stale manifests on first load
+      // Small cache-buster - avoid stale manifests
       const primedM3u8 = absM3u8 + (absM3u8.includes('?') ? '&' : '?') + 't=' + Date.now();
 
       state.m3u8 = absM3u8;
 
-      // [player.js] Build the video element (fresh each play)
+      //Build the video element (each play)
       container.innerHTML = `<video id="media-player" controls playsinline crossorigin style="width:100%;max-height:70vh;"></video>`;
       const video = document.getElementById('media-player');
       state.video = video;
 
-      // [player.js] Optional subtitles: /subs.json next to index.m3u8 (non-blocking)
+      //Optional subtitles: /subs.json next to index.m3u8 (non-blocking)
       (async () => {
         try {
           const subsUrl = absM3u8.replace(/\/index\.m3u8(?:\?.*)?$/, "/subs.json");
@@ -88,12 +87,12 @@
         } catch {}
       })();
 
-      // [player.js] Native HLS (Safari) or Hls.js
+      //Native HLS (Safari) or Hls.js
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = primedM3u8;
       } else if (window.Hls && window.Hls.isSupported()) {
         hls = new window.Hls({
-          // Reasonable VOD defaults (you can tune later)
+          //VOD defaults
           maxBufferLength: 30,
           backBufferLength: 60,
           maxBufferHole: 1,
@@ -101,7 +100,7 @@
           enableWorker: true
         });
 
-        // [player.js] Unified error handling; keep it resilient
+        //Unified error handling
         hls.on(window.Hls.Events.ERROR, (evt, data) => {
           console.warn('HLS error:', data.type, data.details, data);
           if (data.fatal) {
@@ -129,7 +128,7 @@
         return;
       }
 
-      // [player.js] Autoplay handling
+      //Autoplay handling
       try {
         await video.play();
       } catch {
@@ -149,6 +148,6 @@
     }
   }
 
-  // [player.js] public API (unchanged names)
+  //public API
   window.AppPlayer = { playMedia, stopAllMedia };
 })();

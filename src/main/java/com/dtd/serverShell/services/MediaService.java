@@ -82,7 +82,7 @@ public class MediaService {
         }
     }
     
-    
+    //new VOD stream logic - backend hosts pre-encoded files
     public Path resolveVodManifest(String relativePath) throws IOException {
         if (relativePath == null || relativePath.isBlank()) {
             throw new IOException("Empty path");

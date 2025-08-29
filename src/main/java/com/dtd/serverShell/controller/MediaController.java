@@ -36,9 +36,7 @@ import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.dtd.serverShell.config.allowedMediaType;
-import com.dtd.serverShell.model.StreamSession;
 import com.dtd.serverShell.services.MediaService;
-import com.dtd.serverShell.services.StreamService;
 import com.dtd.serverShell.services.UserService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,14 +53,12 @@ public class MediaController {
     private final allowedMediaType allowedmediaType;
     private final AntPathMatcher pathMatcher = new AntPathMatcher(); // Used for pattern matching URI paths
     private final UserService userProfileService;
-    private final StreamService stream;
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
     
-    public MediaController(MediaService mediaService, UserService userProfileService, allowedMediaType allowedmediaType,StreamService stream) {
+    public MediaController(MediaService mediaService, UserService userProfileService, allowedMediaType allowedmediaType) {
         this.mediaService = mediaService;
         this.userProfileService = userProfileService;
         this.allowedmediaType = allowedmediaType;
-        this.stream = stream;
     }
     
     @GetMapping("/list")
@@ -164,64 +160,5 @@ public class MediaController {
             log.error("[VOD/fs] {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-    }
-    //live stream logic (deprecated)
-    @PostMapping("/hls")
-    public ResponseEntity<Map<String, String>> start(@RequestBody Map<String, String> payload) throws IOException {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        String username = auth.getName();
-
-        String filename = payload.get("filename");
-        if (filename == null || filename.isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        Path mediaRoot = Paths.get(mediaDir).toAbsolutePath().normalize();
-        Path resolved  = mediaRoot.resolve(filename).normalize();
-        if (!resolved.startsWith(mediaRoot)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        }
-
-        // Decide MUSIC vs VIDEO strictly by top-level folder: starts with "Music/"
-        // Using relativize avoids false positives (e.g., "MyMusic/...")
-        Path relative = mediaRoot.relativize(resolved);
-        boolean isMusic = (relative.getNameCount() > 0) && "Music".equals(relative.getName(0).toString());
-
-        // Renamed service: use StreamService and StreamSession
-        // (Assumes you have: @Autowired private StreamService stream;)
-        StreamSession session = isMusic
-            ? stream.startMusic(username, resolved)
-            : stream.startVideo(username, resolved);
-
-        String absM3u8 = ServletUriComponentsBuilder
-                .fromCurrentContextPath()
-                .path(session.m3u8Url())    // e.g. "/streams/<sid>/index.m3u8"
-                .toUriString();
-
-        
-        log.info("Started {} session {} for user {} -> {}", (isMusic ? "music" : "video"), session.sid(), username, absM3u8);
-
-        userProfileService.recordView(username, resolved.toString());
-        return ResponseEntity.ok(Map.of(
-            "sessionId", session.sid(),
-            "m3u8", absM3u8
-        ));
-    }
-
-    @DeleteMapping("/hls/{sid}")
-    public ResponseEntity<Void> stop(@PathVariable String sid) {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        var ses = stream.getSession(sid); // StreamService now tracks StreamSession
-        if (ses != null && ses.username().equals(auth.getName())) {
-            stream.stop(sid);
-        }
-        // Always 204 (idempotent)
-        return ResponseEntity.noContent().build();
     }
 }
