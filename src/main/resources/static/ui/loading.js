@@ -18,6 +18,7 @@ export function disableBackButton(disable) {
   disable ? backButton.classList.add("disabled") : backButton.classList.remove("disabled");
 }
 
+
 /*export function showGlobalSpinner() {
   const spinner = document.getElementById("loading-spinner");
   if (spinner) spinner.style.display = "block";

@@ -34,17 +34,58 @@ const GROUP_KEY = "explorer.groupAtRoot";
 const readGroupPref = () => (localStorage.getItem(GROUP_KEY) ?? "true") === "true";
 let groupAtRoot = readGroupPref(); 
 
-function refreshToggleLabel() {
+document.getElementById('toggle-grouping')?.addEventListener('click', () => {
+  groupAtRoot = !groupAtRoot;
+  localStorage.setItem(GROUP_KEY, String(groupAtRoot));
+  refreshToggleLabel(groupAtRoot);
+
+  // If we don't have a cached list yet, do a single fetch at the root.
+  if (!window.currentFileList || !window.currentFileList.length) {
+    return renderFolder(getMediaRoot(), groupAtRoot); // fetch once, then we’ll re-render using the cache
+  }
+  rerenderRootList(); // pure visual re-render (no fetch, no history)
+});
+
+function refreshToggleLabel(groupAtRoot) {
   const btn = document.getElementById('toggle-grouping');
   if (btn) btn.textContent = groupAtRoot ? 'A–Z: On' : 'A–Z: Off';
 }
 
-document.getElementById('toggle-grouping')?.addEventListener('click', () => {
-  groupAtRoot = !groupAtRoot;
-  localStorage.setItem(GROUP_KEY, String(groupAtRoot));
-  renderFolder(getMediaRoot(), groupAtRoot);
-  refreshToggleLabel();
-});
+function rerenderRootList() {
+  const root = getMediaRoot();
+  const files = window.currentFileList || [];
+
+  // Mirror the same prefix logic used by renderFolder()
+  const prefix = (peekHistory() ? peekHistory() + "/" : "");
+
+  const folders = [];
+  const normalFiles = [];
+
+  files.forEach((item) => {
+    // Slice items relative to prefix exactly like renderFolder()
+    const name = item.startsWith(prefix) ? item.slice(prefix.length) : item;
+
+    if (item.endsWith("/")) {
+      if (!folders.includes(name)) folders.push(name);
+    } else if (isSupportedMedia(name)) {
+      normalFiles.push(name);
+    }
+  });
+
+  // Preserve letter “Group: X” if the user clicked a letter
+  const groupLabel = getLastClickedGroupLabel();
+  const shouldGroup = !!(groupAtRoot && !groupLabel); // group only at root when no specific letter is active
+
+  mediaTree.innerHTML = groupLabel ? `<h4>Group: ${groupLabel}</h4>` : "";
+
+  renderListView({
+    folders,
+    files: normalFiles,
+    prefix,
+    isGrouped: shouldGroup,
+    groupLabel
+  });
+}
 
 function hideUtilButtons(){
   const search = document.getElementById("media-search");
@@ -209,8 +250,8 @@ export async function firstRender(path) {
   toggleMediaButtons(false);
   //util buttons
   groupAtRoot = readGroupPref();
+  refreshToggleLabel(groupAtRoot);
   hideUtilButtons();
-  refreshToggleLabel();
   await getAllowedMediaList();
   renderFolder(path, groupAtRoot); //honor toggle at root
 }
@@ -236,6 +277,7 @@ export function renderFolder(path, useGrouping = false) {
       if (!files) return;
 
       setFileList(files);
+	  window.currentFileList = files;
       setCurrentPath(path);
 
       const root = getMediaRoot();
