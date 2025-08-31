@@ -1,6 +1,5 @@
-//File:file.js
+//File: file.js
 
-//file util functions
 let fileList = [];
 
 export function getFileList() { return fileList; }

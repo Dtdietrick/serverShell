@@ -1,4 +1,5 @@
 //File:loading.js
+
 let isLoading = false; 
 
 export function getIsLoading() { return isLoading; }

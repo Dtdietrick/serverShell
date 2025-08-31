@@ -1,4 +1,4 @@
-// File: explorer.js with autoplay functionality
+// File: explorer.js
 
 import {
   setLastClickedGroupLabel,

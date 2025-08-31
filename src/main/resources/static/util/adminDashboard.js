@@ -1,6 +1,7 @@
-//File:adminDashboard.js
+//File: adminDashboard.js
 
-//admin only utils
+/* Admin only utils */
+
 document.addEventListener("DOMContentLoaded", () => {
   fetch("/user/role")
     .then(res => res.json())

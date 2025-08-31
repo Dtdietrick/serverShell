@@ -1,4 +1,7 @@
-//player.js
+//File: player.js
+
+/*Frontend Media Player */
+
 (function () {
   let hls = null;
   const state = { m3u8: null, video: null, sourcePath: null };

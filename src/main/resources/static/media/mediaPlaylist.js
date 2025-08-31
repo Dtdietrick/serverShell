@@ -1,4 +1,4 @@
-// File:playlistManager.js
+// File: playlistManager.js
 
 // DOM references (assumed to be available globally or passed in)
 const playlistPopup = document.getElementById("playlist-popup");

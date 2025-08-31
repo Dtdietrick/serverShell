@@ -1,3 +1,5 @@
+//File: emulator.js
+
 /* 
  * NEW APPROACH LESSONS LEARNED(works):
  * 1 function launchEmulator(rom, button) -> Open popup with immediate content (blank)

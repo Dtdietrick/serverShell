@@ -1,4 +1,6 @@
-})();// FILE: mediaManager.js - Media session and streaming management
+// FILE: mediaManager.js
+
+/* Media session and streaming management */ 
 
 (function () {
   const state = { 

@@ -1,4 +1,4 @@
-// File: /explorer/jumpHandler.js
+// File: mediaDashboard.js
 
 import { renderFolder } from '/explorer/explorer.js';
 

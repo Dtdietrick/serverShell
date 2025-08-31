@@ -1,4 +1,4 @@
-//File:path.js
+//File: path.js
 let lastClickedGroupLabel = null;
 let mediaRoot = "";
 let currentPath = "";

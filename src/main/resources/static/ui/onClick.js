@@ -1,4 +1,5 @@
-//File:onClick.js
+//File: onClick.js
+
 import { showGlobalSpinner, hideGlobalSpinner } from "/ui/loading.js";
 
 export function attachLauncherSpinnerEvents() {

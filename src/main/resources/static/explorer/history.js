@@ -1,5 +1,7 @@
-//File:history.js
+//File: history.js
+
 /*Clean audit of file history and pathing without any virtual diretory noise*/ 
+
 let pathHistory = [];
 
 // Push a new path or marker onto history stack
