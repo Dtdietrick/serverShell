@@ -43,8 +43,10 @@ public class allowedMediaType{
     }
     
     public static boolean isSupportedMediaFile(String name) {
-        String lower = name.toLowerCase();
-        String extension = lower.substring(lower.lastIndexOf('.'));
+        if (name == null) return false;
+        int dot = name.lastIndexOf('.');
+        if (dot < 0) return false;                  
+        String extension = name.substring(dot).toLowerCase();
         return SUPPORTED_EXTENSIONS.contains(extension);
     }
 }

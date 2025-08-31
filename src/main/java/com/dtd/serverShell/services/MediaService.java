@@ -3,13 +3,7 @@ package com.dtd.serverShell.services;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.core.io.Resource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestParam;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -17,7 +11,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -29,8 +27,7 @@ public class MediaService {
     @Value("${media.dir}")
     private String mediaDir;
     private static final Logger log = LoggerFactory.getLogger(MediaService.class);
-    
-    // Recursively list media files under mediaDir with supported extensions
+
     public List<String> listMediaFiles(String currentPath) {
         Path basePath = Paths.get(mediaDir);
         Path targetPath = currentPath.isEmpty() ? basePath : basePath.resolve(currentPath);
@@ -39,46 +36,103 @@ public class MediaService {
             log.warn("Invalid media path: " + targetPath);
             return List.of();
         }
+
         System.out.println("[MediaScan] media.dir = " + mediaDir);
-        System.out.println("MediaScan] currentPath = " + currentPath);
+        System.out.println("[MediaScan] currentPath = " + currentPath);
         System.out.println("[MediaScan] Resolved targetPath = " + targetPath.toAbsolutePath());
+
         try (Stream<Path> stream = Files.list(targetPath)) {
-            List<String> items = stream
-                // Skip the root folder itself
+            // Collect immediate children (folders + supported files)
+            List<Path> children = stream
                 .filter(p -> !p.equals(targetPath))
-                // Filter only supported files or directories
                 .filter(p -> {
                     if (Files.isDirectory(p)) {
-                        String folderName = p.getFileName().toString();
-                        return !folderName.equalsIgnoreCase("lost+found");
+                        String name = String.valueOf(p.getFileName());
+                        return !name.equalsIgnoreCase("lost+found");
                     } else {
-                        return allowedMediaType.isSupportedMediaFile(p.getFileName().toString());
+                        return isSupportedByConfig(p); // strict filter for files
                     }
                 })
-                // Map to relative path from basePath, normalized with '/' separator
-                .map(p -> basePath.relativize(p).toString().replace("\\", "/"))
-                .filter(relPath -> !relPath.isBlank() && !relPath.equals("/") && !relPath.equals("."))
-                .map(relPath -> {
-                    Path absPath = basePath.resolve(relPath);
-                    if (Files.isDirectory(absPath)) {
-                        return relPath.endsWith("/") ? relPath : relPath + "/";
-                    }
-                    return relPath;
-                })
-                .sorted(String::compareToIgnoreCase)
+                .sorted(Comparator.comparing(p -> String.valueOf(p.getFileName()).toLowerCase()))
                 .collect(Collectors.toList());
 
-            items.forEach(item -> {
-                if (item.isBlank()) {
-                    log.warn("Empty or blank virtual item detected!");
-                }
-            });
-            
-            return items;
+            // Partition children into dirs and files
+            List<Path> childDirs  = new ArrayList<>();
+            List<Path> childFiles = new ArrayList<>();
+            for (Path c : children) {
+                if (Files.isDirectory(c)) childDirs.add(c);
+                else                     childFiles.add(c);
+            }
 
+            // Look for DIRECT indexes inside IMMEDIATE child dirs (episode folders)
+            Map<Path, Path> directIndexes = new LinkedHashMap<>();
+            for (Path d : childDirs) {
+                directIndex(d).ifPresent(idx -> {
+                    if (isSupportedByConfig(idx)) {
+                        directIndexes.put(d, idx);
+                    }
+                });
+            }
+
+            List<String> items = new ArrayList<>();
+
+            if (!directIndexes.isEmpty()) {
+                // We are in a "Season" folder (episodes as immediate children):
+                // Return ALL episode indexes as files; also include any supported files directly in Season.
+                childFiles.forEach(f -> items.add(rel(basePath, f)));
+                // Keep order stable by child dir name
+                childDirs.stream()
+                    .sorted(Comparator.comparing(p -> String.valueOf(p.getFileName()).toLowerCase()))
+                    .forEach(d -> {
+                        Path idx = directIndexes.get(d);
+                        if (idx != null) {
+                            items.add(rel(basePath, idx)); // EpisodeX/index.m3u8
+                        } else {
+                            // Episode folder without an index → still show as a folder
+                            items.add(relDir(basePath, d));
+                        }
+                    });
+            } else {
+                // Not a Season folder: show folders as folders + supported files at this level.
+                for (Path d : childDirs)  items.add(relDir(basePath, d));
+                for (Path f : childFiles) items.add(rel(basePath, f));
+            }
+
+            items.removeIf(s -> s == null || s.isBlank() || "/".equals(s) || ".".equals(s));
+            return items;
         } catch (IOException e) {
             log.error("Failed listing media path: " + targetPath, e);
             return List.of();
+        }
+    }
+    
+    private boolean isSupportedByConfig(Path p) {
+        String name = p.getFileName() != null ? p.getFileName().toString() : "";
+        return allowedMediaType.isSupportedMediaFile(name);
+    }
+    
+    /** Return a folder path with trailing slash (relative to base). */
+    private String relDir(Path base, Path dir) {
+        String r = rel(base, dir);
+        return r.endsWith("/") ? r : r + "/";
+    }
+    
+    private String rel(Path base, Path p) {
+        return base.relativize(p).toString().replace("\\", "/");
+    } 
+    
+    private Optional<Path> directIndex(Path dir) {
+        try {
+            Path idx = dir.resolve("index.m3u8");
+            if (Files.isRegularFile(idx)) return Optional.of(idx);
+
+            Path hls = dir.resolve("hls").resolve("index.m3u8");
+            if (Files.isRegularFile(hls)) return Optional.of(hls);
+
+            return Optional.empty();
+        } catch (Exception e) {
+            log.warn("directIndex: error for " + dir + ": " + e.getMessage());
+            return Optional.empty();
         }
     }
     

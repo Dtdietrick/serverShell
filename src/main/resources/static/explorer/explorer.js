@@ -250,6 +250,28 @@ export function renderFolder(path, useGrouping = false) {
     });
 }
 
+async function tryPlayFolderIfIndex(fullFolderPath) {
+  try {
+    const { files } = await fetchFolderContents(fullFolderPath); // returns names relative to folder
+    // Look for an index.m3u8 directly in the folder listing (backend tweak will already surface it)
+    const idx = files.find(f => f.toLowerCase().endsWith('/index.m3u8') || f.toLowerCase() === 'index.m3u8');
+    if (idx) {
+      const playPath = idx.startsWith(fullFolderPath) ? idx : `${fullFolderPath}/${idx}`.replace(/\/{2,}/g,'/');
+      const display = displayNameFor(playPath);
+      const viewerHeader = document.querySelector('#viewer-player h3');
+      if (viewerHeader) viewerHeader.textContent = display;
+      setCurrentPath(playPath);
+      await window.AppPlayer.playMedia(playPath);
+      // stage autoplay prompt for this item
+      stageAutoplayFor(playPath);
+      return true;
+    }
+  } catch (e) {
+    console.debug("tryPlayFolderIfIndex error:", e);
+  }
+  return false;
+}
+
 function renderListView({ folders, files, prefix, isGrouped = false, groupLabel = null }) {
   mediaTree.innerHTML = groupLabel ? `<h4>Group: ${groupLabel}</h4>` : "";
 
