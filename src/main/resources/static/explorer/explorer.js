@@ -21,7 +21,7 @@ import {
 } from "/explorer/history.js";
 
 import { loadPlaylist } from "/media/mediaPlaylist.js";
-import { updateBackButton, showBackButton } from "/ui/backButton.js";
+import { updateBackButton } from "/ui/backButton.js";
 import { getIsLoading, setIsLoading, toggleMediaButtons } from "/ui/loading.js";
 
 const mediaTree = document.getElementById("mediaTree");
@@ -29,6 +29,33 @@ let supportedExtensions = [];
 
 const AUTOPLAY_ENABLED = true;
 
+/* A–Z toggle (UI & root only) */
+const GROUP_KEY = "explorer.groupAtRoot";
+const readGroupPref = () => (localStorage.getItem(GROUP_KEY) ?? "true") === "true";
+let groupAtRoot = readGroupPref(); 
+
+function refreshToggleLabel() {
+  const btn = document.getElementById('toggle-grouping');
+  if (btn) btn.textContent = groupAtRoot ? 'A–Z: On' : 'A–Z: Off';
+}
+
+document.getElementById('toggle-grouping')?.addEventListener('click', () => {
+  groupAtRoot = !groupAtRoot;
+  localStorage.setItem(GROUP_KEY, String(groupAtRoot));
+  renderFolder(getMediaRoot(), groupAtRoot);
+  refreshToggleLabel();
+});
+
+function hideUtilButtons(){
+  const search = document.getElementById("media-search");
+  if (search) search.style.display = "block";
+	 
+  const backButton = document.querySelector(".back-btn");
+  if (backButton) backButton.style.display = "block";   
+		                        
+  const azGroup = document.getElementById("toggle-grouping");
+  if (azGroup) azGroup.style.display = "inline-block";  
+}
 //fetch folder listing (return array of folders/files)
 async function fetchFolderContents(path) {
   const encoded = encodeURIComponent(path);
@@ -180,9 +207,12 @@ export async function firstRender(path) {
   setMediaRoot(path);
   setCurrentPath(path);
   toggleMediaButtons(false);
-  showBackButton();
+  //util buttons
+  groupAtRoot = readGroupPref();
+  hideUtilButtons();
+  refreshToggleLabel();
   await getAllowedMediaList();
-  renderFolder(path, true);
+  renderFolder(path, groupAtRoot); //honor toggle at root
 }
 
 export function renderFolder(path, useGrouping = false) {
@@ -199,10 +229,7 @@ export function renderFolder(path, useGrouping = false) {
 
   fetch(apiPath)
     .then((res) => {
-      if (res.status === 401) {
-        window.location.href = "/login";
-        return;
-      }
+      if (res.status === 401) { window.location.href = "/login"; return; }
       return res.json();
     })
     .then((files) => {
@@ -210,13 +237,16 @@ export function renderFolder(path, useGrouping = false) {
 
       setFileList(files);
       setCurrentPath(path);
-      pushHistory(path);
+
+      const root = getMediaRoot();
+      if (path !== root && peekHistory() !== path) {
+        pushHistory(path);
+      }
+
       updateSearchVisibility();
       updateBackButton(path);
 
       const prefix = peekHistory() ? peekHistory() + "/" : "";
-      const searchQuery = getSearchQuery();
-
       const folders = [];
       const normalFiles = [];
 
@@ -224,20 +254,22 @@ export function renderFolder(path, useGrouping = false) {
         const name = item.startsWith(prefix) ? item.slice(prefix.length) : item;
         if (item.endsWith("/")) {
           if (!folders.includes(name)) folders.push(name);
-        } else {
-          if (isSupportedMedia(name)) normalFiles.push(name);
+        } else if (isSupportedMedia(name)) {
+          normalFiles.push(name);
         }
       });
 
+      const isRoot = path === getMediaRoot();
+      const shouldGroup = isRoot && !!useGrouping;
+
       mediaTree.innerHTML = getLastClickedGroupLabel()
-        ? `<h4>Group: ${getLastClickedGroupLabel()}</h4>`
-        : "";
+        ? `<h4>Group: ${getLastClickedGroupLabel()}</h4>` : "";
 
       renderListView({
-        folders,
+        folders: folders,
         files: normalFiles,
         prefix,
-        isGrouped: useGrouping
+        isGrouped: shouldGroup
       });
     })
     .catch((err) => {
@@ -291,6 +323,7 @@ function renderListView({ folders, files, prefix, isGrouped = false, groupLabel 
   mediaTree.appendChild(scrollContainer);
 }
 
+// A–Z letter view
 function renderGroupedAZView(letterGroups, prefix) {
   const ul = document.createElement("ul");
 
@@ -304,6 +337,17 @@ function renderGroupedAZView(letterGroups, prefix) {
       const fullFolderPaths = groupFiles.filter(f => f.endsWith("/"));
       const fullFilePaths = groupFiles.filter(f => !f.endsWith("/"));
 
+      // If the letter maps to exactly ONE real folder, auto-enter it (so Back is enabled)
+      const realFolders = fullFolderPaths.map(f => {
+        let p = f.startsWith(prefix) ? f : (prefix + f);
+        return p.replace(/\/{2,}/g, "/");
+      });
+      if (realFolders.length === 1 && fullFilePaths.length === 0) {
+        // navigate to the single real folder
+        return renderFolder(realFolders[0].slice(0, -1));
+      }
+
+      // Otherwise, show the filtered list in-place (still at root; no history push)
       setLastClickedGroupLabel(letter);
       setCurrentPath(prefix);
 
@@ -322,6 +366,7 @@ function renderGroupedAZView(letterGroups, prefix) {
   return ul;
 }
 
+//Normal DIR view
 function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
   const ul = document.createElement("ul");
 
@@ -394,12 +439,7 @@ function displayNameFor(path) {
 export function updateSearchVisibility() {
   const searchInput = document.getElementById("media-search");
   if (searchInput) {
-    if (!peekHistory()) {
-      searchInput.style.display = "none";
-      searchInput.value = "";
-    } else {
-      searchInput.style.display = "block";
-    }
+	searchInput.style.display = "block";
   }
 }
 

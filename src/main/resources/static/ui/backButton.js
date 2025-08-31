@@ -14,55 +14,39 @@ import {
   setCurrentPath
 } from "/explorer/path.js";
 
-import { 
-    disableBackButton
-} from "/ui/loading.js";
-
+import { disableBackButton } from "/ui/loading.js";
 import { renderFolder } from "/explorer/explorer.js";
 
-// Back button navigates up one folder and fetches new data
 const backButton = document.querySelector(".back-btn");
+const GROUP_KEY = "explorer.groupAtRoot";
+//Back button navigates up one folder and fetches new data
 backButton.onclick = () => {
   const root = getMediaRoot();
   const prev = popHistory();
 
   if (!prev) return;
 
-    const current = getCurrentPath();
-    setLastClickedGroupLabel(""); // clear group label on back
-    setCurrentPath(prev); // real path going back to
-    // If current was inside a virtual group, we were in a grouped view
-    const wasInVirtual = current === prev;
+  // clear any letter tag
+  setLastClickedGroupLabel(""); 
+  setCurrentPath(prev);
 
-    if (wasInVirtual && prev === root) {
-      console.log("Back from virtual group to grouped root:", prev);
-      renderFolder(prev, true);
-    } else {
-      console.log("Back to:", prev);
-      renderFolder(prev, prev === root);
-    }
+  const groupPref = (localStorage.getItem("explorer.groupAtRoot") ?? "true") === "true";
+  renderFolder(prev, prev === root ? groupPref : false);
   };
 
 // Update visibility and audit history
 export function updateBackButton(path) {
   const root = getMediaRoot();
-  const prev = peekHistory();
-  const atRoot = path === root;
-  
+  const atRoot = path === root;  
   // disable back if we're at root
   disableBackButton(atRoot);
-  
-  if (!prev) return; // history uninitialized
- 
-  // Push path to history if it's a new navigable path
-  if (!atRoot && path !== prev) {
-    pushHistory(path);
+
+  const toggle = document.getElementById("toggle-grouping");
+  if (toggle) {
+    toggle.disabled = !atRoot;
+    toggle.classList.toggle('disabled', !atRoot);
+    toggle.style.display = "inline-block"; // ensure it stays visible once shown
   }
 
   console.log(`Back button state updated — path: ${path}, root: ${root}`);
-}
-
-export function showBackButton(){
-    const backButton = document.querySelector(".back-btn");
-    backButton.style.display = 'block';
 }

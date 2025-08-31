@@ -12,11 +12,11 @@
   <link rel="stylesheet" href="/css/theme.css">
   <!-- Component styles -->
   <link rel="stylesheet" href="/css/components/buttons.css">
-  <link rel="stylesheet" href="/css/components/mainMenu.css">
+  <link rel="stylesheet" href="/css/components/pinnedLaunchers.css">
   <link rel="stylesheet" href="/css/components/mediaTree.css">
-  <link rel="stylesheet" href="/css/components/mediaViewer.css">
+  <link rel="stylesheet" href="/css/components/viewerPlayer.css">
   <link rel="stylesheet" href="/css/components/playlist.css">
-  <link rel="stylesheet" href="/css/components/spinner.css">
+<!--  <link rel="stylesheet" href="/css/components/spinner.css">-->
   <!-- 404 fav icon -->
   <link rel="icon" href="data:,">
   <!-- Media player -->
@@ -44,23 +44,30 @@
 		  <li><button onclick="launchEmulator('The Legend of Zelda-Majoras Mask.z64',this)"> Majora's Mask</button></li>
         </ul>
       </div>
+	  
+	  <div class="media-controls">
+	    <input
+	      type="text"
+	      id="media-search"
+	      placeholder="Search..."
+	    />
+	    <button id="toggle-grouping" title="Toggle A–Z grouping at root">A–Z: On</button>
+	    <button class="back-btn">Back</button>
+	  </div>
+	  
+	  
       <div id="media-launcher">
         <h3>Browse Media</h3>
         <ul>
           <li><button onclick="firstRender('Books')" class="media-btn">📚 Books</button></li>
           <li><button onclick="firstRender('TV')" class="media-btn">📺 TV</button></li>
           <li><button onclick="firstRender('Movies')" class="media-btn">🎬 Movies</button></li>
-          <li><button onclick="firstRender('Music')" class="media-btn">🎵 Music</button></li>
+          <li><button onclick="firstRender('Music')" class="media-btn">🎵 Music</button></li>		  
         </ul>
       </div>
-      <input
-        type="text"
-        id="media-search"
-        placeholder="Search..."
-        style="display: none; margin: 0.5rem 1rem; padding: 0.3rem; width: 80%;"
-      />
-      <button class="back-btn">Back</button>
-    </div>
+	    
+   <!-- Top nav end-->
+   </div>
 
     <!-- MAIN LAYOUT -->
     <div id="main-layout">
@@ -73,7 +80,7 @@
       </div>
 
     <!-- Spinner -->
-    <div id="loading-spinner">⏳ Loading ...</div>
+<!--    <div id="loading-spinner">⏳ Loading ...</div>-->
 
     <!-- Playlist Popup -->
     <div id="playlist-popup">

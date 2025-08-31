@@ -1,6 +1,6 @@
 //File: onClick.js
 
-import { showGlobalSpinner, hideGlobalSpinner } from "/ui/loading.js";
+/*import { showGlobalSpinner, hideGlobalSpinner } from "/ui/loading.js";*/
 
 export function attachLauncherSpinnerEvents() {
   const launcher = document.getElementById("pinned-launchers");
@@ -14,12 +14,12 @@ export function attachLauncherSpinnerEvents() {
 
       button.disabled = true;
       button.textContent = "Loading... ⏳";
-      showGlobalSpinner();
+/*      showGlobalSpinner();*/
 
       setTimeout(() => {
         button.disabled = false;
         button.textContent = originalText;
-        hideGlobalSpinner();
+/*        hideGlobalSpinner();*/
       }, 2500);
     });
   });

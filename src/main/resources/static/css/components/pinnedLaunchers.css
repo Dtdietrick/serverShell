@@ -1,0 +1,54 @@
+/* FILE: pinnedLaunchers */
+
+/* Visual styling for pinned launcher */
+#pinned-launchers {
+  border-bottom: 1px solid #ccc;
+  flex-direction: column;
+  font-size: 0.9rem;
+}
+
+#pinned-launchers h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+#pinned-launchers ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  gap: 0.5rem;
+}
+
+#pinned-launchers li {
+  margin: 0;
+}
+
+#pinned-launchers button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+#media-launcher {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Controls row sits under the “Browse Media” header, left-aligned */
+#media-launcher .media-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.75rem 0;
+  flex-wrap: wrap;               
+  width: fit-content;            
+}
+
+#media-search {
+  display: none;                
+  width: 18rem;                  
+  max-width: 60vw;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+}

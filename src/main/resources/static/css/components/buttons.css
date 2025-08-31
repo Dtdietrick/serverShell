@@ -1,23 +1,24 @@
-button.disabled,
-.back-btn.disabled {
+.back-btn,
+#toggle-grouping {
+  display: none;                
+  padding: 0.5rem 1rem;
+  border-radius: 0.4rem;
+  border: 1px solid #444;
+  background: #222;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color .2s ease;
+}
+.back-btn:hover:not(.disabled),
+#toggle-grouping:hover:not(.disabled) {
+  background-color: #333;
+}
+
+/* Disabled state (mirror Back behavior) */
+.back-btn.disabled,
+#toggle-grouping.disabled {
   opacity: 0.5;
   pointer-events: none;
   cursor: not-allowed;
-}
-
-.back-btn {
-  margin-bottom: 1rem;
-  padding: 0.5rem 1rem;
-  background-color: #222;
-  color: #fff;
-  border: 1px solid #444;
-  border-radius: 0.4rem;
-  font-weight: bold;
-  cursor: pointer;
-  display: none;
-  transition: background-color 0.2s ease;
-}
-
-.back-btn:hover:not(.disabled) {
-  background-color: #333;
 }

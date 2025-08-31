@@ -5,17 +5,6 @@ let isLoading = false;
 export function getIsLoading() { return isLoading; }
 export function setIsLoading(bool) { isLoading = bool; }
 
-
-export function showGlobalSpinner() {
-  const spinner = document.getElementById("loading-spinner");
-  if (spinner) spinner.style.display = "block";
-}
-
-export function hideGlobalSpinner() {
-  const spinner = document.getElementById("loading-spinner");
-  if (spinner) spinner.style.display = "none";
-}
-
 export function toggleMediaButtons(show) {
   const buttons = document.querySelectorAll(".media-btn"); 
   buttons.forEach((btn) => {
@@ -28,3 +17,14 @@ export function disableBackButton(disable) {
   console.log("disable back button?: ", disable);
   disable ? backButton.classList.add("disabled") : backButton.classList.remove("disabled");
 }
+
+/*export function showGlobalSpinner() {
+  const spinner = document.getElementById("loading-spinner");
+  if (spinner) spinner.style.display = "block";
+}
+
+export function hideGlobalSpinner() {
+  const spinner = document.getElementById("loading-spinner");
+  if (spinner) spinner.style.display = "none";
+}
+*/
