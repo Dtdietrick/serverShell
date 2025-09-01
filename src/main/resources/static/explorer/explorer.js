@@ -1,4 +1,4 @@
-// File: explorer.js
+// File: NEW explorer.js
 
 import {
   setLastClickedGroupLabel,
@@ -33,6 +33,7 @@ const AUTOPLAY_ENABLED = true;
 const GROUP_KEY = "explorer.groupAtRoot";
 const readGroupPref = () => (localStorage.getItem(GROUP_KEY) ?? "true") === "true";
 let groupAtRoot = readGroupPref(); 
+const autoplaySiblingCache = new Map();
 
 document.getElementById('toggle-grouping')?.addEventListener('click', () => {
   groupAtRoot = !groupAtRoot;
@@ -49,6 +50,30 @@ document.getElementById('toggle-grouping')?.addEventListener('click', () => {
 function refreshToggleLabel(groupAtRoot) {
   const btn = document.getElementById('toggle-grouping');
   if (btn) btn.textContent = groupAtRoot ? 'A–Z: On' : 'A–Z: Off';
+}
+
+//helper to derive sibling order
+function deriveSiblingNamesFromListing({ folders, files }) {
+  // Preferred: files that are episode indexes (e.g., "Ep 01/index.m3u8" or "index.m3u8")
+  const indexFiles = (files || []).filter(f => {
+    const lower = f.toLowerCase();
+    return lower.endsWith('/index.m3u8') || lower === 'index.m3u8';
+  });
+
+  if (indexFiles.length > 0) {
+    // Map each "…/index.m3u8" to its immediate directory name. If it's just "index.m3u8",
+    // treat the directory name as the *current folder* (there's only one item).
+    const names = indexFiles.map(f => {
+      const parts = f.split('/').filter(Boolean);
+      if (parts.length >= 2) return parts[parts.length - 2]; // “…/<leaf>/index.m3u8”
+      return 'index.m3u8'; // rare case: single playable index at folder root
+    });
+    // Keep original order; remove dupes just in case
+    return [...new Set(names)];
+  }
+
+  // Fallback: we didn’t get flattened index files; use folders list
+  return (folders || []).map(f => f.replace(/\/+$/,'').split('/').pop());
 }
 
 function rerenderRootList() {
@@ -125,45 +150,50 @@ async function computeNextIndexPath(currentFullPath) {
 
   const parts = currentFullPath.split("/").filter(Boolean);
   if (parts.length < 3) {
-    console.debug("[autoplay] too few parts for", currentFullPath);
+    console.log("[autoplay] too few parts for", currentFullPath);
     return null;
   }
 
   const isIndex = parts[parts.length - 1].toLowerCase() === "index.m3u8";
   const baseParts = isIndex ? parts.slice(0, -2) : parts.slice(0, -1);
   const leafFolder = (isIndex ? parts[parts.length - 2] : parts[parts.length - 1]) || "";
-  const basePath = baseParts.join("/");
+  const basePath = baseParts.join("/").replace(/\/+$/,'');
 
   if (!basePath) {
-    console.debug("[autoplay] empty basePath for", currentFullPath);
+    console.log("[autoplay] empty basePath for", currentFullPath);
     return null;
   }
 
-  const { folders } = await fetchFolderContents(basePath);
-  // Normalize all sibling folder names to plain names without trailing slash
-  const siblingNames = sortItems(folders).map(f =>
-    f.replace(/\/+$/,'').split("/").pop()
-  );
+  // 1) Try cached ordering first (populated by renderFolder)
+  let siblingNames = autoplaySiblingCache.get(basePath);
 
-  const leafLower = leafFolder.toLowerCase();
-  const curIdx = siblingNames.findIndex(n => (n || "").toLowerCase() === leafLower);
+  // 2) If no cache, fetch and derive using the same “new knowledge” rules
+  if (!siblingNames || siblingNames.length === 0) {
+    const { folders, files } = await fetchFolderContents(basePath);
+    siblingNames = deriveSiblingNamesFromListing({ folders, files });
+  }
+
+  // Normalize + sort exactly like your list rendering
+  const ordered = sortItems(siblingNames || []);
+
+  const leafLower = (leafFolder || "").toLowerCase();
+  const curIdx = ordered.findIndex(n => (n || "").toLowerCase() === leafLower);
   if (curIdx < 0) {
-    console.debug("[autoplay] current leaf not found among siblings", { basePath, leafFolder, siblingNames });
+    console.log("[autoplay] current leaf not found among siblings", { basePath, leafFolder, ordered });
     return null;
   }
 
   const nextIdx = curIdx + 1;
-  if (nextIdx >= siblingNames.length) {
-    console.debug("[autoplay] no next sibling (end of list)", { basePath, siblingNames });
+  if (nextIdx >= ordered.length) {
+    console.log("[autoplay] no next sibling (end of list)", { basePath, ordered });
     return null;
   }
 
-  const nextFolderName = siblingNames[nextIdx];
+  const nextFolderName = ordered[nextIdx];
   const nextPath = `${basePath}/${nextFolderName}/index.m3u8`;
-  console.debug("[autoplay] next candidate:", nextPath);
+  console.log("[autoplay] next candidate:", nextPath);
   return nextPath;
 }
-
 
 //auto play check
 function showNextPrompt(nextPath) {
@@ -222,18 +252,17 @@ function showNextPrompt(nextPath) {
   });
 
   container.appendChild(prompt);
-  console.debug("[autoplay] prompt injected for:", nextPath);
+  console.log("[autoplay] prompt injected for:", nextPath);
 }
 
 //autoplay path; set AppPlayer.onEnded once per click
-function stageAutoplayFor(fullPath) {
+export function stageAutoplayFor(libraryPath) {
   if (!AUTOPLAY_ENABLED || !window.AppPlayer) return;
 
-  window.AppPlayer.onEnded = async (endedPath) => {
-    const from = endedPath || fullPath;
+  window.AppPlayer.onEnded = async () => {
     try {
-      console.debug("[autoplay] ended detected for:", from);
-      const nextPath = await computeNextIndexPath(from);
+      console.log("[autoplay] ended detected for:", libraryPath);
+      const nextPath = await computeNextIndexPath(libraryPath);
       if (!nextPath) return;
       showNextPrompt(nextPath);
     } catch (e) {
@@ -241,6 +270,8 @@ function stageAutoplayFor(fullPath) {
     }
   };
 }
+
+window.stageAutoplayFor = stageAutoplayFor;
 
 // Entry point for root-level navigation
 export async function firstRender(path) {
@@ -252,6 +283,7 @@ export async function firstRender(path) {
   groupAtRoot = readGroupPref();
   refreshToggleLabel(groupAtRoot);
   hideUtilButtons();
+  autoplaySiblingCache.clear();
   await getAllowedMediaList();
   renderFolder(path, groupAtRoot); //honor toggle at root
 }
@@ -307,6 +339,10 @@ export function renderFolder(path, useGrouping = false) {
       mediaTree.innerHTML = getLastClickedGroupLabel()
         ? `<h4>Group: ${getLastClickedGroupLabel()}</h4>` : "";
 
+	  //cache sibling order for autoplay
+	  const siblingNames = deriveSiblingNamesFromListing({ folders, files: normalFiles });
+	  autoplaySiblingCache.set(path.replace(/\/+$/,'') || '', siblingNames);
+		
       renderListView({
         folders: folders,
         files: normalFiles,
@@ -341,7 +377,7 @@ async function tryPlayFolderIfIndex(fullFolderPath) {
       return true;
     }
   } catch (e) {
-    console.debug("tryPlayFolderIfIndex error:", e);
+    console.log("tryPlayFolderIfIndex error:", e);
   }
   return false;
 }
@@ -426,7 +462,13 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
     }
     fullPath = fullPath.replace(/\/{2,}/g, "/");
 
-    li.onclick = () => renderFolder(fullPath.slice(0, -1));
+	li.onclick = async () => {
+	  const folder = fullPath.slice(0, -1);
+	  // Try to auto-play if folder has an index.m3u8; otherwise navigate
+	  const played = await tryPlayFolderIfIndex(folder);
+	  if (!played) renderFolder(folder);
+	};
+	
     console.log("Folder click:", fullPath.slice(0, -1));
 
     ul.appendChild(li);
