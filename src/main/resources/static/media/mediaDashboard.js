@@ -16,7 +16,7 @@ export async function handleJumpParam() {
   let seasonFolder;
   const last = parts[parts.length - 1].toLowerCase();
   if (last === "index.m3u8" && parts.length >= 3) {
-    // .../Season X/<Episode>/index.m3u8  → render .../Season X
+    // .../Season X/<Episode>/index.m3u8  -> render .../Season X
     seasonFolder = parts.slice(0, -2).join("/");
   } else {
     // generic fallback: render the parent folder

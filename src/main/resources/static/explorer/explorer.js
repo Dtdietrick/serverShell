@@ -35,21 +35,22 @@ const readGroupPref = () => (localStorage.getItem(GROUP_KEY) ?? "true") === "tru
 let groupAtRoot = readGroupPref(); 
 const autoplaySiblingCache = new Map();
 
-document.getElementById('toggle-grouping')?.addEventListener('click', () => {
-  groupAtRoot = !groupAtRoot;
-  localStorage.setItem(GROUP_KEY, String(groupAtRoot));
-  refreshToggleLabel(groupAtRoot);
-
-  // If we don't have a cached list yet, do a single fetch at the root.
-  if (!window.currentFileList || !window.currentFileList.length) {
-    return renderFolder(getMediaRoot(), groupAtRoot); // fetch once, then we’ll re-render using the cache
-  }
-  rerenderRootList(); // pure visual re-render (no fetch, no history)
-});
-
-function refreshToggleLabel(groupAtRoot) {
+function initGroupingToggle() {
   const btn = document.getElementById('toggle-grouping');
-  if (btn) btn.textContent = groupAtRoot ? 'A–Z: On' : 'A–Z: Off';
+  if (!btn) return;
+
+  // Set initial label exactly once at startup
+  btn.textContent = groupAtRoot ? 'A–Z: On' : 'A–Z: Off';
+
+  // Flip only on user click, then refresh label
+  btn.addEventListener('click', () => {
+    groupAtRoot = !groupAtRoot;
+    localStorage.setItem(GROUP_KEY, String(groupAtRoot));
+    btn.textContent = groupAtRoot ? 'A–Z: On' : 'A–Z: Off';
+
+    // Re-render root (or whatever your current-root render call is)
+    rerenderRootList?.() ?? renderFolder(getMediaRoot(), groupAtRoot);
+  }, { passive: true });
 }
 
 //helper to derive sibling order
@@ -195,6 +196,16 @@ async function computeNextIndexPath(currentFullPath) {
   return nextPath;
 }
 
+// helper used for all playback starts
+async function playAndStage(path) {                      
+  const display = displayNameFor(path);
+  const viewerHeader = document.querySelector('#viewer-player h3');
+  if (viewerHeader) viewerHeader.textContent = display;
+  setCurrentPath(path);
+  await window.AppPlayer.playMedia(path);
+  stageAutoplayFor(path);                                
+}
+
 //auto play check
 function showNextPrompt(nextPath) {
   const container = document.getElementById('player-container');
@@ -242,10 +253,7 @@ function showNextPrompt(nextPath) {
 
   prompt.querySelector('#next-play-btn')?.addEventListener('click', async () => {
     try {
-      const viewerHeader = document.querySelector('#viewer-player h3');
-      if (viewerHeader) viewerHeader.textContent = display;
-      setCurrentPath(nextPath);
-      await window.AppPlayer.playMedia(nextPath);
+      await playAndStage(nextPath);                    
     } finally {
       prompt.remove();
     }
@@ -261,8 +269,10 @@ export function stageAutoplayFor(libraryPath) {
 
   window.AppPlayer.onEnded = async () => {
     try {
-      console.log("[autoplay] ended detected for:", libraryPath);
-      const nextPath = await computeNextIndexPath(libraryPath);
+      // Prefer the last path we just set (via playAndStage); fall back to provided argument
+      const basePath = libraryPath;
+      console.log("[autoplay] ended detected for:", basePath);
+      const nextPath = await computeNextIndexPath(basePath);
       if (!nextPath) return;
       showNextPrompt(nextPath);
     } catch (e) {
@@ -281,7 +291,7 @@ export async function firstRender(path) {
   toggleMediaButtons(false);
   //util buttons
   groupAtRoot = readGroupPref();
-  refreshToggleLabel(groupAtRoot);
+  initGroupingToggle();
   hideUtilButtons();
   autoplaySiblingCache.clear();
   await getAllowedMediaList();
@@ -362,20 +372,13 @@ export function renderFolder(path, useGrouping = false) {
 
 async function tryPlayFolderIfIndex(fullFolderPath) {
   try {
-    const { files } = await fetchFolderContents(fullFolderPath); // returns names relative to folder
-    // Look for an index.m3u8 directly in the folder listing (backend tweak will already surface it)
-    const idx = files.find(f => f.toLowerCase().endsWith('/index.m3u8') || f.toLowerCase() === 'index.m3u8');
-    if (idx) {
-      const playPath = idx.startsWith(fullFolderPath) ? idx : `${fullFolderPath}/${idx}`.replace(/\/{2,}/g,'/');
-      const display = displayNameFor(playPath);
-      const viewerHeader = document.querySelector('#viewer-player h3');
-      if (viewerHeader) viewerHeader.textContent = display;
-      setCurrentPath(playPath);
-      await window.AppPlayer.playMedia(playPath);
-      // stage autoplay prompt for this item
-      stageAutoplayFor(playPath);
-      return true;
-    }
+    const { files } = await fetchFolderContents(fullFolderPath);
+    const hasDirectIndex = (files || []).some(f => f.toLowerCase() === 'index.m3u8');
+    if (!hasDirectIndex) return false;
+
+    const playPath = `${fullFolderPath}/index.m3u8`;
+    await playAndStage(playPath);                       // ← CHANGED (was: set header + setCurrentPath + play + stage)
+    return true;
   } catch (e) {
     console.log("tryPlayFolderIfIndex error:", e);
   }
@@ -462,13 +465,7 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
     }
     fullPath = fullPath.replace(/\/{2,}/g, "/");
 
-	li.onclick = async () => {
-	  const folder = fullPath.slice(0, -1);
-	  // Try to auto-play if folder has an index.m3u8; otherwise navigate
-	  const played = await tryPlayFolderIfIndex(folder);
-	  if (!played) renderFolder(folder);
-	};
-	
+	li.onclick = () => renderFolder(fullPath.slice(0, -1));
     console.log("Folder click:", fullPath.slice(0, -1));
 
     ul.appendChild(li);
@@ -489,19 +486,12 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
         window.location.href = `/epubReader.html?file=${encodeURIComponent(fullPath)}`;
       };
     } else {
-      setCurrentPath(fullPath);
-      li.onclick = () => {
-        // start playback
-        AppPlayer.playMedia(fullPath);
-
-        // update viewer label immediately
-        const viewerHeader = document.querySelector('#viewer-player h3');
-        if (viewerHeader) viewerHeader.textContent = display;
-
-        // stage autoplay for the NEXT sibling (relative)
-        stageAutoplayFor(fullPath);
-      };
-    }
+	    const full = fullPath; 
+	    li.onclick = () => {
+	      // start playback with unified helper
+	      playAndStage(full);                                 
+	    };
+	  }
 
     ul.appendChild(li);
   }
