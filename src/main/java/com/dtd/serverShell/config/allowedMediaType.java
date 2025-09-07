@@ -17,7 +17,7 @@ public class allowedMediaType{
 //        );
 
     public static final List<String> SUPPORTED_EXTENSIONS = List.of(
-            ".m3u8", ".epub"
+            ".m3u8", ".epub", ".vtt"
         );
     
     /*DEPRECATED OLD LIVE STREAM LOGIC*/

@@ -7,8 +7,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -164,8 +167,9 @@ public class MediaController {
                 // HLS fMP4 segment
                 // Some players prefer application/octet-stream; both generally work.
                 type = MediaType.APPLICATION_OCTET_STREAM;
-            } else if (name.endsWith(".mp4")) {
-                type = MediaType.valueOf("video/mp4");
+            } else if (name.endsWith(".vtt")) {
+                // WebVTT subtitle files
+                type = MediaType.parseMediaType("text/vtt");
             } else {
                 type = MediaType.APPLICATION_OCTET_STREAM;
             }
@@ -178,6 +182,92 @@ public class MediaController {
 
         } catch (Exception e) {
             log.error("[VOD/fs] {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @GetMapping("/subs")
+    public ResponseEntity<List<Map<String, String>>> getSubtitles(@RequestParam("path") String dirPath) {
+        try {
+            // normalize incoming path to be relative to mediaRoot
+            String decodedDirPath = dirPath;
+            if (decodedDirPath.startsWith("/")) {                    
+                decodedDirPath = decodedDirPath.substring(1);        
+            }
+
+            Path mediaRoot = Paths.get(mediaDir).toAbsolutePath().normalize();
+            Path directory = mediaRoot.resolve(decodedDirPath).normalize();  
+
+            if (!directory.startsWith(mediaRoot) || !Files.isDirectory(directory)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+
+            List<Map<String, String>> subtitleTracks = new ArrayList<>();
+
+            //ensure the directory stream is closed
+            try (java.util.stream.Stream<Path> stream = Files.list(directory)) {  
+                stream
+                    .filter(Files::isRegularFile)
+                    .filter(file -> file.getFileName().toString().toLowerCase().endsWith(".vtt"))
+                    .forEach(vttFile -> {
+                        String fileName = vttFile.getFileName().toString();
+                        String baseName = fileName.substring(0, fileName.length() - 4); // Remove .vtt
+
+                        // Parse language/label from filename (unchanged)
+                        String label = baseName;
+                        String lang = null;
+                        if (baseName.contains(".")) {
+                            String[] parts = baseName.split("\\.");
+                            if (parts.length > 1) {
+                                String lastPart = parts[parts.length - 1].toLowerCase();
+                                switch (lastPart) {
+                                    case "en": case "eng": case "english": lang = "en"; label = "English"; break;
+                                    case "es": case "spa": case "spanish": case "espanol": lang = "es"; label = "Spanish"; break;
+                                    case "fr": case "fra": case "french": case "francais": lang = "fr"; label = "French"; break;
+                                    case "de": case "ger": case "german": case "deutsch": lang = "de"; label = "German"; break;
+                                    case "it": case "ita": case "italian": case "italiano": lang = "it"; label = "Italian"; break;
+                                    case "pt": case "por": case "portuguese": case "portugues": lang = "pt"; label = "Portuguese"; break;
+                                    case "ja": case "jpn": case "japanese": lang = "ja"; label = "Japanese"; break;
+                                    case "ko": case "kor": case "korean": lang = "ko"; label = "Korean"; break;
+                                    case "zh": case "chi": case "chinese": lang = "zh"; label = "Chinese"; break;
+                                    default:
+                                        lang = lastPart;
+                                        label = lastPart.substring(0, 1).toUpperCase() + lastPart.substring(1);
+                                        break;
+                                }
+                            }
+                        }
+
+                        // Keep using /media/vod/fs/** passthrough
+                        String relativePath = mediaRoot.relativize(vttFile).toString().replace('\\', '/');
+                        String subtitleUrl = ServletUriComponentsBuilder
+                                .fromCurrentContextPath()
+                                .path("/media/vod/fs/")
+                                .path(relativePath)
+                                .toUriString();
+
+                        Map<String, String> track = new HashMap<>();
+                        track.put("src", subtitleUrl);
+                        track.put("label", label);
+
+                        // NEW: always provide a lang (fallback 'en' or 'und')
+                        track.put("lang", (lang != null && !lang.isBlank()) ? lang : "jap");
+                        subtitleTracks.add(track);
+                    });
+            } catch (IOException e) {
+                log.error("Error listing subtitle files in directory: {}", directory, e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            }
+
+            subtitleTracks.sort((a, b) -> a.get("label").compareToIgnoreCase(b.get("label")));
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .cacheControl(CacheControl.maxAge(300, TimeUnit.SECONDS))
+                    .body(subtitleTracks);
+
+        } catch (Exception e) {
+            log.error("Error generating subtitles JSON", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

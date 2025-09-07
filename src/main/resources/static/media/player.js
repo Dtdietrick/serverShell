@@ -27,6 +27,135 @@
     state.sourcePath = null; // track last requested path
   }
 
+  async function loadSubtitles(video, sourcePath) {
+    try {
+      // --- keep your logic, but make dir detection a bit safer ---
+      let dirPath = sourcePath;
+      // If it's a file path (index.m3u8 or any extension), peel to directory
+      const lastSlash = sourcePath.lastIndexOf('/');
+      const lastDot   = sourcePath.lastIndexOf('.');
+      if (lastDot > lastSlash && !sourcePath.endsWith('/')) {
+        dirPath = sourcePath.substring(0, lastSlash);
+      }
+
+      // IMPORTANT: do NOT strip a **leading** slash if your backend expects it.
+      // Only collapse duplicate slashes and remove a single trailing slash.
+      dirPath = dirPath.replace(/\/{2,}/g, '/').replace(/\/$/, '');
+      if (!dirPath.startsWith('/')) {
+        // Change: keep a leading slash so backends that expect absolute-like paths work.
+        dirPath = '/' + dirPath;
+      }
+
+      const subsUrl = `/media/subs?path=${encodeURIComponent(dirPath)}`;
+      console.log('Attempting to load subtitles from:', subsUrl);
+
+      const r = await fetch(subsUrl, {
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!r.ok) {
+        if (r.status === 404) {
+          console.log('No subtitles available for this media');
+        } else if (r.status === 204) {
+          console.log('Subtitles endpoint returned 204 (no content)');
+        } else {
+          console.warn(`Subtitles request failed: ${r.status} ${r.statusText}`);
+        }
+        return;
+      }
+
+      // --- NEW: tolerate empty body / wrong content-type when body is empty ---
+      let tracks = [];
+      const ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (ct.includes('application/json')) {
+        // normal path
+        tracks = await r.json();
+      } else {
+        // try to be forgiving: empty => [], JSON string => parse, else bail
+        const txt = await r.text();
+        if (!txt.trim()) {
+          tracks = [];
+        } else {
+          try { tracks = JSON.parse(txt); }
+          catch { console.warn('Subtitles endpoint returned non-JSON body'); return; }
+        }
+      }
+
+      console.log('Loaded subtitle tracks:', tracks);
+      if (!Array.isArray(tracks) || tracks.length === 0) {
+        console.log('No subtitle tracks found');
+        return;
+      }
+
+      let defaultTrackSet = false;
+      tracks.forEach((t, index) => {
+        if (!t || !t.src) { console.warn('Subtitle track missing src:', t); return; }
+		const track = document.createElement('track');
+		track.kind  = 'subtitles';
+		track.label = t.label || `Subtitles ${index + 1}`;
+
+		// NEW: ensure srclang exists (required for subtitles)
+		track.srclang = t.lang || 'en'; // <-- fallback if controller provided none
+
+		track.src = t.src.startsWith('http')
+		  ? t.src
+		  : (t.src.startsWith('/') ? window.location.origin + t.src : t.src);
+
+		// keep your default logic
+		if (!defaultTrackSet && (t.lang === 'en' || index === 0)) {
+		  track.default = true;
+		  defaultTrackSet = true;
+		}
+
+		video.appendChild(track);
+		
+		if (track.default) {
+		  // after the element attaches, force "showing"
+		  track.addEventListener('load', () => {
+		    try { track.track.mode = 'showing'; } catch {}
+		    // Some browsers only expose via video.textTracks
+		    const list = video.textTracks;
+		    for (let i = 0; i < list.length; i++) {
+		      if (list[i].label === track.label) { list[i].mode = 'showing'; break; }
+		    }
+		  });
+		}
+		
+        console.log(`Added subtitle track: ${track.label} (${track.srclang || 'no-lang'})`);
+      });
+
+      if (tracks.length > 0) showSubtitleNotification(tracks.length);
+    } catch (error) {
+      console.error('Error loading subtitles:', error);
+    }
+  }
+  
+  // Optional: Show a brief notification when subtitles are loaded
+  function showSubtitleNotification(count) {
+    const notification = document.createElement('div');
+    notification.textContent = `${count} subtitle track${count > 1 ? 's' : ''} loaded`;
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font: 12px system-ui;
+      z-index: 1000;
+      transition: opacity 0.3s;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.style.opacity = '0';
+      setTimeout(() => notification.remove(), 300);
+    }, 2000);
+  }
+  
   async function startVod(pathOrFolder) {
     const res = await fetch('/media/vod', {
       method: 'POST',
@@ -65,26 +194,8 @@
       const video = document.getElementById('media-player');
       state.video = video;
 
-      // Fire-and-forget optional subtitles load
-      (async () => {
-        try {
-          const subsUrl = absM3u8.replace(/\/index\.m3u8(?:\?.*)?$/, "/subs.json");
-          const r = await fetch(subsUrl, { cache: 'no-store' });
-          if (r.ok) {
-            const tracks = await r.json();
-            if (Array.isArray(tracks)) {
-              tracks.forEach(t => {
-                const track = document.createElement('track');
-                track.kind = 'subtitles';
-                track.label = t.label || (t.lang || 'Sub');
-                if (t.lang) track.srclang = t.lang;
-                track.src = t.src;
-                video.appendChild(track);
-              });
-            }
-          }
-        } catch {}
-      })();
+      // Load subtitles - now with correct parameters
+      await loadSubtitles(video, filenameOrFolder);
 
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = primedM3u8;
@@ -142,7 +253,7 @@
     }
   }
 
-  // expose a tiny API — onEnded is optional and unset by default
+  // expose a tiny API – onEnded is optional and unset by default
   window.AppPlayer = {
     playMedia,
     stopAllMedia,
