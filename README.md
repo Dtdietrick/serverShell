@@ -139,11 +139,13 @@ WantedBy=multi-user.target
 - [✅] Ereader fix [revert] (v1.0.0.7)
 - [✅] dark style quickfix (v1.0.0.8)
 - [✅] Full VOD stream (v1.0.0.8)
-- [✅] Initial N64 Emulator setup (v1.0.0.8) 
+- [✅] Initial N64 Emulator setup (v1.0.0.8)
+- [ ] User favorite playlist
 - [ ] Full N64 Emulator functionality
+- [ ] Fix Search Bar
+Maybe List
 - [ ] ESLint/Checkstyle
 - [ ] gba custom controls
-- [ ] User favorite playlist
 - [ ] add polling logic to container
 - [ ] view toggle
 - [ ] eupub user controls
@@ -151,7 +153,6 @@ WantedBy=multi-user.target
 - [ ] logup service 
 - [ ] split out services into microservices
 - [ ] user media request service
-
 - [ ] beautify UI - part 3
 - [ ] Self.pentest
 - [ ] 
