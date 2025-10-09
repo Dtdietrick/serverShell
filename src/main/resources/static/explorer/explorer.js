@@ -77,18 +77,25 @@ function deriveSiblingNamesFromListing({ folders, files }) {
   return (folders || []).map(f => f.replace(/\/+$/,'').split('/').pop());
 }
 
+function filterFoldersByQuery(folders, query) {
+  const q = (query || "").trim().toLowerCase();
+  if (!q) return folders;
+  return folders.filter(f => {
+    const leaf = f.replace(/\/+$/,'').split('/').pop();
+    return (leaf || "").toLowerCase().includes(q);
+  });
+}
+
 function rerenderRootList() {
   const root = getMediaRoot();
   const files = window.currentFileList || [];
 
-  // Mirror the same prefix logic used by renderFolder()
   const prefix = (peekHistory() ? peekHistory() + "/" : "");
 
   const folders = [];
   const normalFiles = [];
 
   files.forEach((item) => {
-    // Slice items relative to prefix exactly like renderFolder()
     const name = item.startsWith(prefix) ? item.slice(prefix.length) : item;
 
     if (item.endsWith("/")) {
@@ -98,15 +105,19 @@ function rerenderRootList() {
     }
   });
 
-  // Preserve letter “Group: X” if the user clicked a letter
+  // Preserve “Group: X” header if the user clicked a letter
   const groupLabel = getLastClickedGroupLabel();
-  const shouldGroup = !!(groupAtRoot && !groupLabel); // group only at root when no specific letter is active
+  const shouldGroup = !!(groupAtRoot && !groupLabel); 
+
+  const query = getSearchQuery();
+  const searchedFolders = filterFoldersByQuery(folders, query);
+  const searchedFiles = query ? [] : normalFiles; // ← suppress files when searching for folders
 
   mediaTree.innerHTML = groupLabel ? `<h4>Group: ${groupLabel}</h4>` : "";
 
   renderListView({
-    folders,
-    files: normalFiles,
+    folders: searchedFolders,
+    files: searchedFiles,
     prefix,
     isGrouped: shouldGroup,
     groupLabel
@@ -388,13 +399,27 @@ async function tryPlayFolderIfIndex(fullFolderPath) {
 function renderListView({ folders, files, prefix, isGrouped = false, groupLabel = null }) {
   mediaTree.innerHTML = groupLabel ? `<h4>Group: ${groupLabel}</h4>` : "";
 
+  const query = getSearchQuery();
+  const foldersOnly = filterFoldersByQuery(folders, query);
+  const filesForView = query ? [] : files; // ← no files when searching
+
+  // Handle "no matches" UX when searching
+  if (query && foldersOnly.length === 0) {
+    const wrap = document.createElement("div");
+    wrap.id = "media-scroll";
+    wrap.innerHTML = `<p style="opacity:.8">No matching folders for “${query}”.</p>`;
+    mediaTree.appendChild(wrap);
+    return;
+  }
+
   let ul;
   if (isGrouped && !groupLabel) {
-    const letterGroups = groupFoldersByLetter(folders, files, getSearchQuery());
+    // Pass files=[] so grouping is truly folder-only under search
+    const letterGroups = groupFoldersByLetter(foldersOnly, [], query);
     ul = renderGroupedAZView(letterGroups, prefix);
   } else {
-    const sortedFolders = sortItems(folders);
-    const sortedFiles = sortItems(files);
+    const sortedFolders = sortItems(foldersOnly);
+    const sortedFiles = sortItems(filesForView);
     ul = renderStandardFolderView(sortedFolders, sortedFiles, prefix);
   }
 
