@@ -20,7 +20,7 @@ import {
   resetHistory,
 } from "/explorer/history.js";
 
-import { loadPlaylist } from "/media/mediaPlaylist.js";
+import { loadPlaylist, setPlayMediaCallback } from "/media/mediaPlaylist.js";
 import { updateBackButton } from "/ui/backButton.js";
 import { getIsLoading, setIsLoading, toggleMediaButtons } from "/ui/loading.js";
 
@@ -34,6 +34,11 @@ const GROUP_KEY = "explorer.groupAtRoot";
 const readGroupPref = () => (localStorage.getItem(GROUP_KEY) ?? "true") === "true";
 let groupAtRoot = readGroupPref(); 
 const autoplaySiblingCache = new Map();
+const isPlaylistFile = (name) => (name || "").toLowerCase().endsWith(".m3u");
+
+setPlayMediaCallback((path, inPopup = true, fromPlaylist = true) => {
+  return window.AppPlayer?.playMedia(path, inPopup, fromPlaylist);
+});
 
 function initGroupingToggle() {
   const btn = document.getElementById('toggle-grouping');
@@ -510,13 +515,16 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
       li.onclick = () => {
         window.location.href = `/epubReader.html?file=${encodeURIComponent(fullPath)}`;
       };
+    } else if (isPlaylistFile(fileName)) {
+      // NEW: open playlist via existing module, no extra UI needed
+      li.onclick = () => loadPlaylist(fullPath);
     } else {
-	    const full = fullPath; 
-	    li.onclick = () => {
-	      // start playback with unified helper
-	      playAndStage(full);                                 
-	    };
-	  }
+      // existing media (index/m3u8, audio/video files, etc.)
+      const full = fullPath;
+      li.onclick = () => {
+        playAndStage(full);
+      };
+    }
 
     ul.appendChild(li);
   }
@@ -524,13 +532,17 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
   return ul;
 }
 
-// unchanged
 function displayNameFor(path) {
   const parts = (path || "").split("/").filter(Boolean);
   if (parts.length === 0) return path || "";
   const last = parts[parts.length - 1].toLowerCase();
   if (last === "index.m3u8") {
     return parts.length >= 2 ? parts[parts.length - 2] : "Video";
+  }
+  // NEW: strip ".m3u" extension for nicer titles
+  if (last.endsWith(".m3u")) {
+    const leaf = parts[parts.length - 1];
+    return leaf.replace(/\.m3u$/i, "");
   }
   return parts[parts.length - 1];
 }

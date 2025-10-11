@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -168,26 +169,20 @@ public class MediaService {
     // List all playlist names (without .m3u extension) in the playlists subfolder of mediaDir
     public List<String> listPlaylists() {
         List<String> names = new ArrayList<>();
-        Path playlistsDir = Paths.get(mediaDir, "playlists"); // playlist folder is directly under mediaDir
+        Path playlistsDir = Paths.get(mediaDir, "playlists");
 
-        if (!Files.exists(playlistsDir) || !Files.isDirectory(playlistsDir)) {
-            return names;
-        }
+        if (!Files.isDirectory(playlistsDir)) return names;
 
         try (var stream = Files.list(playlistsDir)) {
             stream.filter(Files::isRegularFile)
-                  .filter(f -> f.getFileName().toString().endsWith(".m3u"))
-                  .forEach(f -> {
-                      String name = f.getFileName().toString();
-                      if (name.endsWith(".m3u")) {
-                          name = name.substring(0, name.length() - 4); // remove extension
-                      }
-                      names.add(name);
-                  });
+                  .map(Path::getFileName)
+                  .map(Path::toString)
+                  .filter(n -> n.toLowerCase(Locale.ROOT).endsWith(".m3u"))
+                  .map(n -> n.substring(0, n.length() - 4))
+                  .forEach(names::add);
         } catch (IOException e) {
-           log.error("Error during listPlaylists", e);
+            log.error("[MediaService] Error during listPlaylists", e);
         }
-
         return names;
     }
 
@@ -197,60 +192,93 @@ public class MediaService {
     }
 
     // Load playlist with pagination (offset and limit)
-    public List<String> loadPlaylist(String name, int offset, int limit) 
-    {
-        List<String> playlist = new ArrayList<>();
-        Path playlistPath = Paths.get(mediaDir, name + ".m3u").normalize();
-        // musicDir is assumed two levels up from playlist file (e.g. mediaDir/music)
-        Path musicDir = playlistPath.getParent().getParent();
+    public List<String> loadPlaylist(String name, int offset, int limit) {
+        if (name == null || name.isBlank()) return List.of();
+        String cleaned = name.trim();
 
-        // Validate playlist file existence
-        if (!Files.exists(playlistPath) || !Files.isRegularFile(playlistPath))
-        {
-            log.error("[MediaService] Playlist file not found: " + playlistPath);
-            return playlist;
+        // If it's a pure label (no slash and no extension), add .m3u under "playlists/" for legacy callers
+        boolean looksLikeLabel = !cleaned.contains("/") && !cleaned.toLowerCase(Locale.ROOT).endsWith(".m3u");
+        Path playlistPath;
+        if (looksLikeLabel) {
+            playlistPath = Paths.get(mediaDir, "playlists", cleaned + ".m3u").normalize();
+        } else {
+            // It might already include ".m3u" and/or subfolders
+            if (!cleaned.toLowerCase(Locale.ROOT).endsWith(".m3u")) cleaned = cleaned + ".m3u";
+            // Treat input as relative to mediaDir (reject absolute to avoid escaping)
+            cleaned = cleaned.replace('\\', '/').replaceAll("^/+", "");
+            playlistPath = Paths.get(mediaDir).resolve(cleaned).normalize();
         }
 
-        int skipped = 0;
-        int collected = 0;
+        return loadPlaylistByAbsolutePath(playlistPath, offset, limit);
+    }
 
-        try (BufferedReader reader = Files.newBufferedReader(playlistPath, StandardCharsets.UTF_8))
-        {
+    /** New: load given a path that is already relative to mediaDir (e.g. "Music/File/newVibes.m3u") */
+    public List<String> loadPlaylistByRelPath(String relPath, int offset, int limit) {
+        if (relPath == null || relPath.isBlank()) return List.of();
+        String cleaned = relPath.trim().replace('\\', '/').replaceAll("^/+", "");
+        if (!cleaned.toLowerCase(Locale.ROOT).endsWith(".m3u")) cleaned += ".m3u";
+
+        Path playlistPath = Paths.get(mediaDir).resolve(cleaned).normalize();
+        return loadPlaylistByAbsolutePath(playlistPath, offset, limit);
+    }
+
+    /** Core worker: validates location, reads lines, resolves entries relative to the playlist file's parent */
+    private List<String> loadPlaylistByAbsolutePath(Path playlistPath, int offset, int limit) {
+        List<String> out = new ArrayList<>();
+        Path mediaRoot = Paths.get(mediaDir).toAbsolutePath().normalize();
+
+        // Security: require playlist to live under mediaDir
+        if (!playlistPath.startsWith(mediaRoot)) {
+            log.error("[MediaService] Playlist outside media root rejected: {}", playlistPath);
+            return out;
+        }
+        if (!Files.isRegularFile(playlistPath)) {
+            log.error("[MediaService] Playlist file not found: {}", playlistPath);
+            return out;
+        }
+
+        Path baseDir = playlistPath.getParent(); // M3U relative paths are resolved against the playlist's folder
+        int skipped = 0, collected = 0;
+
+        try (BufferedReader reader = Files.newBufferedReader(playlistPath, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
-                // Skip empty lines and comments
                 if (line.isEmpty() || line.startsWith("#")) continue;
 
-                // Decode URL-encoded paths and normalize separators
+                // Decode percent-escapes; normalize slashes
                 String decoded = java.net.URLDecoder.decode(line, StandardCharsets.UTF_8);
-                decoded = decoded.replace("\\", "/");
+                decoded = decoded.replace('\\', '/');
 
-                // Resolve path against music directory
-                Path resolved = musicDir.resolve(decoded).normalize();
-
-                // Validate resolved path is inside musicDir and file exists
-                if (resolved.startsWith(musicDir) && Files.exists(resolved) && Files.isRegularFile(resolved)) {
-                    // Skip entries before offset
-                    if (skipped < offset) {
-                        skipped++;
-                        continue;
-                    }
-                    // Stop if limit reached
-                    if (collected >= limit) break;
-
-                    // Add relative path from musicDir to playlist result
-                    String relativePath = musicDir.relativize(resolved).toString().replace("\\", "/");
-                    playlist.add(relativePath);
-                    collected++;
+                Path candidate;
+                if (decoded.startsWith("/") || decoded.matches("^[A-Za-z]:/.*")) {
+                    // Absolute path in the playlist — allow only if it stays under mediaDir
+                    candidate = Paths.get(decoded).normalize();
                 } else {
-                    log.warn("[MediaService] Skipping invalid or missing path in playlist: " + decoded);
+                    // Relative entry — resolve against the playlist folder
+                    candidate = baseDir.resolve(decoded).normalize();
                 }
+
+                if (!candidate.startsWith(mediaRoot)) {
+                    log.warn("[MediaService] Skipping path outside media root in playlist: {}", decoded);
+                    continue;
+                }
+                if (!Files.isRegularFile(candidate)) {
+                    log.warn("[MediaService] Skipping missing path in playlist: {}", decoded);
+                    continue;
+                }
+
+                if (skipped < offset) { skipped++; continue; }
+                if (collected >= limit) break;
+
+                // Return media-root-relative path with forward slashes
+                String rel = mediaRoot.relativize(candidate).toString().replace('\\', '/');
+                out.add(rel);
+                collected++;
             }
         } catch (IOException e) {
-            log.error("Error during load playlists", e);
+            log.error("[MediaService] Error reading playlist: {}", playlistPath, e);
         }
-
-        return playlist;
+        return out;
     }
 }

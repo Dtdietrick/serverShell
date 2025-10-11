@@ -1,4 +1,4 @@
-// File: playlistManager.js
+// File: mediaPlaylist.js
 
 // DOM references (assumed to be available globally or passed in)
 const playlistPopup = document.getElementById("playlist-popup");
@@ -14,76 +14,114 @@ let playlistHasMore = true;
 let currentPlaylist = [];
 let currentTrackIndex = -1;
 
-/**
- * Loads playlist tracks from backend in paginated fashion.
- * @param {string} name - Playlist name/path
- * @param {boolean} reset - Reset playlist and UI if true
- */
-export function loadPlaylist(name, reset = true) {
+//remember original player mount to move it into popup
+let originalPlayerParent = null;
+
+function openPlaylistPopup() {
+  playlistPopup.classList.add('open');     
+}
+
+// helper: normalize server item -> { path, title?, duration? }
+function normalizeItem(item) {
+  if (typeof item === "string") {
+    const leaf = item.split("/").filter(Boolean).slice(-2, -1)[0] || item.split("/").pop();
+    return { path: item, title: leaf, duration: null };
+  }
+  // defensive copy if server returns {path,title,duration}
+  return {
+    path: item.path,
+    title: item.title || (item.path?.split("/").pop() ?? ""),
+    duration: typeof item.duration === "number" ? item.duration : null
+  };
+}
+
+function renderLiForItem(nItem, idx) {
+  const li = document.createElement("li");
+  li.innerHTML = `
+    <span class="title" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nItem.title}</span>
+    ${nItem.duration ? `<span class="chip">${formatDuration(nItem.duration)}</span>` : ""}
+  `;
+  li.onclick = () => {
+    setActiveIndex(idx);
+    playMedia(nItem.path, true, true);
+  };
+  return li;
+}
+
+function setActiveIndex(nextIdx) {
+  currentTrackIndex = nextIdx;
+  // toggle row highlight
+  Array.from(playlistItems.children).forEach((li, i) => {
+    li.classList.toggle("active", i === currentTrackIndex);
+  });
+}
+
+// simple mm:ss or m:ss formatter
+function formatDuration(sec) {
+  const s = Math.max(0, Math.round(sec));
+  const m = Math.floor(s / 60), r = s % 60;
+  return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
+export function loadPlaylist(nameOrPath, reset = true) {
   if (reset) {
-    currentPlaylistName = name;
+    currentPlaylistName = nameOrPath;
     playlistOffset = 0;
     playlistHasMore = true;
     playlistItems.innerHTML = "";
-    popupPlayer.innerHTML = "";
-    currentPlaylist = [];
+    ensurePopupHasPlayer();             // <-- mount player UI inside popup
+	playlistPopup.classList.add('open');
+	currentPlaylist = [];
     currentTrackIndex = -1;
   }
-
   if (!playlistHasMore || playlistLoading) return;
 
   playlistLoading = true;
-  
-  const shuffleButton = document.getElementById("shuffle-button");
-  if (shuffleButton) {
-    shuffleButton.disabled = playlistLoading || currentPlaylist.length <= 1;
-    shuffleButton.classList.toggle("disabled", shuffleButton.disabled);
-  }
-  
-  fetch(
-    `/media/playlist?name=${encodeURIComponent(
-      name
-    )}&offset=${playlistOffset}&limit=${playlistLimit}`
-  )
-    .then((res) => res.json())
-    .then((files) => {
-      if (!Array.isArray(files) || files.length === 0) {
+  updateShuffleButton();
+
+  // Prefer sending 'path' (your controller supports it). Works if it still expects 'name' too.
+  const qs = new URLSearchParams({
+    path: nameOrPath,
+    offset: String(playlistOffset),
+    limit: String(playlistLimit)
+  });
+
+  fetch(`/media/playlist?${qs.toString()}`)
+    .then(res => res.json())
+    .then(items => {
+      if (!Array.isArray(items) || items.length === 0) {
         playlistHasMore = false;
-        playlistLoading = false;
         return;
       }
 
-      files.forEach((file, i) => {
-        const li = document.createElement("li");
-        li.textContent = file.split("/").pop();
-        li.onclick = () => {
-          currentTrackIndex = Array.from(playlistItems.children).indexOf(li);
-          playMedia(file, true, true); // Play in popup, from playlist
-        };
+      items.forEach((raw, i) => {
+        const n = normalizeItem(raw);
+        const li = renderLiForItem(n, currentPlaylist.length + i);
         playlistItems.appendChild(li);
+        currentPlaylist.push(n);
 
-        // Auto play first track when resetting playlist
+        // Autoplay the first on fresh reset
         if (reset && i === 0 && playlistOffset === 0) {
-          currentTrackIndex = 0;
-          playMedia(file, true, true);
+          setActiveIndex(0);
+          playMedia(n.path, true, true);
         }
-
-        currentPlaylist.push(file);
       });
 
-      playlistOffset += files.length;
-      playlistLoading = false;
-      playlistPopup.style.display = "block"; // Show popup
+      playlistOffset += items.length;
+      openPlaylistPopup();
     })
-    .catch(() => {
+    .finally(() => {
       playlistLoading = false;
-      
-      const shuffleButton = document.getElementById("shuffle-button");
-      if (shuffleButton) {
-        shuffleButton.disabled = playlistLoading || currentPlaylist.length <= 1;
-        shuffleButton.classList.toggle("disabled", shuffleButton.disabled);
-      }
+      updateShuffleButton();
     });
+}
+
+function updateShuffleButton() {
+  const b = document.getElementById("shuffle-button");
+  if (b) {
+    b.disabled = playlistLoading || currentPlaylist.length <= 1;
+    b.classList.toggle("disabled", b.disabled);
+  }
 }
 
 /**
@@ -91,18 +129,17 @@ export function loadPlaylist(name, reset = true) {
  */
 export function nextInPlaylist() {
   if (currentTrackIndex < currentPlaylist.length - 1) {
-    currentTrackIndex++;
-    playMedia(currentPlaylist[currentTrackIndex], true, true);
+    setActiveIndex(currentTrackIndex + 1);
+    playMedia(currentPlaylist[currentTrackIndex].path, true, true);
   } else {
-    // Attempt to load more tracks if available
     const before = currentPlaylist.length;
     loadPlaylist(currentPlaylistName, false);
     setTimeout(() => {
       if (currentPlaylist.length > before) {
-        currentTrackIndex++;
-        playMedia(currentPlaylist[currentTrackIndex], true, true);
+        setActiveIndex(currentTrackIndex + 1);
+        playMedia(currentPlaylist[currentTrackIndex].path, true, true);
       }
-    }, 500);
+    }, 400);
   }
 }
 
@@ -111,8 +148,50 @@ export function nextInPlaylist() {
  */
 export function prevInPlaylist() {
   if (currentTrackIndex > 0) {
-    currentTrackIndex--;
-    playMedia(currentPlaylist[currentTrackIndex], true, true);
+    setActiveIndex(currentTrackIndex - 1);
+    playMedia(currentPlaylist[currentTrackIndex].path, true, true);
+  }
+}
+
+/**
+ * Shuffle playlist and play a random track.
+ */
+export function shufflePlaylist() {
+  if (playlistLoading || currentPlaylist.length <= 1) return;
+  let r;
+  do { r = Math.floor(Math.random() * currentPlaylist.length); } while (r === currentTrackIndex);
+  setActiveIndex(r);
+  playMedia(currentPlaylist[r].path, true, true);
+}
+
+function ensurePopupHasPlayer() {
+  const player = document.getElementById("player-container");
+  if (!player) return;
+  if (!originalPlayerParent) {
+    originalPlayerParent = player.parentElement || null;
+  }
+  if (popupPlayer && player.parentElement !== popupPlayer) {
+    popupPlayer.appendChild(player);
+    player.classList.add("in-popup");
+  }
+}
+
+function pausePlayback() {
+  try {
+    // Prefer player API if available
+    if (window.AppPlayer && typeof window.AppPlayer.pause === "function") {
+      window.AppPlayer.pause();
+      return;
+    }
+  } catch (e) {
+    console.warn("AppPlayer.pause failed:", e);
+  }
+
+  // Fallback: pause the media element
+  const mediaEl = document.querySelector('#player-container video, #player-container audio');
+  if (mediaEl && typeof mediaEl.pause === "function") {
+    mediaEl.autoplay = false;   // guard against auto-resume
+    mediaEl.pause();
   }
 }
 
@@ -120,14 +199,15 @@ export function prevInPlaylist() {
  * Close and reset the playlist popup.
  */
 export function closePlaylist() {
-  playlistPopup.style.display = "none";
-  popupPlayer.innerHTML = "";
+  pausePlayback();
+
+  playlistPopup.classList.remove('open');
   playlistItems.innerHTML = "";
 
-  // Clear the playlist search input value too
-  const playlistSearchInput = document.getElementById("playlist-search");
-  if (playlistSearchInput) {
-    playlistSearchInput.value = "";
+  const player = document.getElementById("player-container");
+  if (originalPlayerParent && player && player.parentElement !== originalPlayerParent) {
+    originalPlayerParent.appendChild(player);
+    player.classList.remove("in-popup");
   }
 
   currentPlaylist = [];
@@ -137,29 +217,7 @@ export function closePlaylist() {
   playlistHasMore = true;
   playlistLoading = false;
 }
-
-/**
- * Shuffle playlist and play a random track.
- */
-export function shufflePlaylist() {
-  if (playlistLoading) {
-    console.warn("Playlist still loading. Try again in a second.");
-    return;
-  }
-
-  if (currentPlaylist.length <= 1) return;
-
-  let randomIndex;
-  do {
-    randomIndex = Math.floor(Math.random() * currentPlaylist.length);
-  } while (randomIndex === currentTrackIndex);
-
-  currentTrackIndex = randomIndex;
-  AppPlayer.playMedia(currentPlaylist[randomIndex], true, true);
-}
-
-// Export helper needed by playlist (playMedia is in mediaExplorer.js)
-// We’ll import and set a callback from mediaExplorer.js
+// Export helper needed by playlist
 export let playMediaCallback = null;
 
 export function setPlayMediaCallback(callback) {

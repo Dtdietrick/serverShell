@@ -80,15 +80,22 @@ public class MediaController {
         return ResponseEntity.ok(mediaService.listPlaylists());
     }
 
-    
     @GetMapping("/playlist")
     public ResponseEntity<List<String>> getPlaylist(
-            @RequestParam("name") String name,
+            @RequestParam(required = false) String path,
+            @RequestParam(required = false) String name,
             @RequestParam(defaultValue = "0") int offset,
-            @RequestParam(defaultValue = "10") int limit) {
+            @RequestParam(defaultValue = "" + Integer.MAX_VALUE) int limit) {
 
-        // Endpoint to get a paginated playlist by name, with offset and limit parameters
-        return ResponseEntity.ok(mediaService.loadPlaylist(name, offset, limit));
+        List<String> items;
+        if (path != null && !path.isBlank()) {
+            items = mediaService.loadPlaylistByRelPath(path, offset, limit);
+        } else if (name != null && !name.isBlank()) {
+            items = mediaService.loadPlaylist(name, offset, limit);
+        } else {
+            items = List.of();
+        }
+        return ResponseEntity.ok(items);
     }
     
     @GetMapping("/allowedMedia")

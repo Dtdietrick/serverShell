@@ -83,19 +83,27 @@
 <!--    <div id="loading-spinner">⏳ Loading ...</div>-->
 
     <!-- Playlist Popup -->
-    <div id="playlist-popup">
-      <span class="close-btn" onclick="closePlaylist()">✖</span>
-      <h3>🎵 Playlist</h3>
-      <ul id="playlist-items"></ul>
+	<div id="playlist-popup">
+	  <span class="close-btn" onclick="closePlaylist()">✖</span>
+	  <h3>🎵 Playlist</h3>
 
-      <div id="playlist-controls" style="margin: 1rem 0; text-align: center;">
-        <button onclick="prevInPlaylist()">⏮ Prev</button>
-        <button onclick="nextInPlaylist()">⏭ Next</button>
-        <button id="shuffle-button" onclick="shufflePlaylist()">Shuffle</button>
-      </div>
+	  <input id="playlist-search" placeholder="Filter tracks…" />
 
-      <div id="popup-player"></div>
-    </div>
+	  <!-- Player docked inside the dialog -->
+	  <div id="popup-player"></div>
+
+	  <!-- Controls pinned; list scrolls below -->
+	  <div id="playlist-controls">
+	    <button onclick="prevInPlaylist()">⏮ Prev</button>
+	    <button onclick="nextInPlaylist()">⏭ Next</button>
+	    <button id="shuffle-button" onclick="shufflePlaylist()">Shuffle</button>
+	  </div>
+
+	  <!-- body wrapper gives the list a bounded region -->
+	  <div id="playlist-body">
+	    <ul id="playlist-items"></ul>
+	  </div>
+	</div>
 
   <!-- Main logic pulled in as ES modules -->
   <script type="module">
@@ -126,6 +134,36 @@
     window.addEventListener("DOMContentLoaded", () => {
       attachLauncherSpinnerEvents();
     });
+  </script>
+  
+  <script type="module">
+    import {
+      loadPlaylist,
+      closePlaylist,
+      nextInPlaylist,
+      prevInPlaylist,
+      shufflePlaylist,
+      initPlaylist,
+      setPlayMediaCallback
+    } from '/media/mediaPlaylist.js';
+
+    // Expose for existing onclick handlers
+    Object.assign(window, {
+      loadPlaylist,
+      closePlaylist,
+      nextInPlaylist,
+      prevInPlaylist,
+      shufflePlaylist
+    });
+
+    // Hook playlist to the main player once HLS/player is ready
+    // (player.js sets window.AppPlayer; it’s already loaded via <script src="/media/player.js">)
+    setPlayMediaCallback((path, inPopup = true, fromPlaylist = true) => {
+      return window.AppPlayer?.playMedia(path, inPopup, fromPlaylist);
+    });
+
+    // Initialize internal listeners (infinite scroll, search, etc.)
+    initPlaylist();
   </script>
 </body>
 </html>
