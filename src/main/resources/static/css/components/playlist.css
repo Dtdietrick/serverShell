@@ -98,7 +98,7 @@
 }
 
 /* Rows */
-#playlist-items li {
+#playlist-items li #media-scroll{
   list-style: none;
   padding: .6rem .8rem;
   border: 1px solid #2b3140;
@@ -139,7 +139,7 @@
 }
 
 /* contain and ellipsize long text */
-.media-row .media-label {
+.media-row .media-label #media-scroll{
   flex: 1 1 auto;
   min-width: 0;                   
   overflow: hidden;               

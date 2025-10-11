@@ -632,7 +632,7 @@ async function decorateFavoritesInView(prefix) {
 
   const favSet = await getFavoritesForCategory(category);
 
-  // Find only index rows (the ones eligible for ⭐)
+  // Find only index rows (the ones eligible for star)
   const rows = document.querySelectorAll("#mediaTree #media-scroll li.file.is-index");
   rows.forEach((li) => {
     const rel = normalizeRelForClient(li.dataset.rel || "");
