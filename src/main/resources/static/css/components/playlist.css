@@ -1,3 +1,4 @@
+/* File: playlist.css */
 #playlist-popup {
   position: fixed;
   top: 10%;
@@ -109,6 +110,43 @@
   justify-content: space-between;
   background: #111823;
 }
+
+.media-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow: hidden;               /* contain everything within row */
+}
+
+.media-row .media-icon {
+  flex: 0 0 auto;
+  width: 1.2em;
+}
+
+.media-row .fav-star {
+  flex: 0 0 auto;
+  color: #ccc;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2em;
+  line-height: 1;
+  padding: 0;
+}
+
+.media-row .fav-star.is-fav {
+  color: gold;
+}
+
+/* contain and ellipsize long text */
+.media-row .media-label {
+  flex: 1 1 auto;
+  min-width: 0;                   
+  overflow: hidden;               
+  white-space: nowrap;            
+  text-overflow: ellipsis;      
+}
+
 #playlist-items li:hover { background: #182030; }
 #playlist-items li.active { background: #21314d; }
 
@@ -119,3 +157,15 @@
   background: #20304a;
   color: #bcd3ff;
 }
+
+.fav-star {
+  margin-right: .6rem;
+  border: none;
+  background: transparent;
+  color: #bcd3ff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.fav-star.is-fav { color: #ffd166; }    /* filled star color */
+.fav-star:focus { outline: 1px solid #2b3140; border-radius: 4px; }

@@ -3,6 +3,7 @@ package com.dtd.serverShell.services;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
@@ -10,13 +11,18 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -29,6 +35,9 @@ public class MediaService {
     private String mediaDir;
     private static final Logger log = LoggerFactory.getLogger(MediaService.class);
 
+    private Path mediaRoot() {
+        return Paths.get(mediaDir).toAbsolutePath().normalize();
+    }
     public List<String> listMediaFiles(String currentPath) {
         Path basePath = Paths.get(mediaDir);
         Path targetPath = currentPath.isEmpty() ? basePath : basePath.resolve(currentPath);
@@ -107,6 +116,195 @@ public class MediaService {
         }
     }
     
+    private String currentUsername() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return (auth != null && auth.isAuthenticated()) ? String.valueOf(auth.getName()) : "anonymous";
+    }
+
+    private String categoryOfRel(String relPath) {
+        if (relPath == null) return null;
+        String first = relPath.replace('\\','/').replaceAll("^/+", "").split("/")[0].toLowerCase();
+        return switch (first) {
+            case "movies" -> "Movies";
+            case "tv"     -> "TV";
+            case "music"  -> "Music";
+            default       -> null;
+        };
+    }
+
+    private Path resolveUserFavoritesPlaylist(String category) {
+        if (category == null) return null;
+        Path root = mediaRoot();
+        Path p = root.resolve(Path.of(category, "*Playlists*", currentUsername() + ".m3u")).normalize();
+        return p.startsWith(root) ? p : null;
+    }
+
+    private boolean ensureParentDirs(Path file) {
+        try {
+            Files.createDirectories(file.getParent());
+            if (!Files.exists(file)) Files.createFile(file);
+            return true;
+        } catch (IOException e) {
+            log.error("[MediaService] ensureParentDirs failed for {}", file, e);
+            return false;
+        }
+    }
+
+    private String toPlaylistRelative(Path playlistParent, Path absoluteTarget) {
+        Path rel = playlistParent.relativize(absoluteTarget).normalize();
+        String s = rel.toString().replace('\\','/');
+
+        // Ensure we *consistently* use "../" style (never "./" or absolute) in stored .m3u lines
+        // From category/*Playlists*/  => category/Seasons/...   becomes  ../Seasons/...
+        // If for some reason it's not starting with "../", force it (this should not happen in your layout)
+        if (!s.startsWith("../")) {
+            if (s.startsWith("./")) s = s.substring(2);
+            if (!s.startsWith("../")) s = "../" + s;
+        }
+        // collapse any accidental multiple slashes
+        s = s.replaceAll("/+", "/");
+        return s;
+    }
+
+    /** Resolve a stored .m3u line (which should be "../...") or any relative string against the playlist's parent. */
+    private Path resolveAgainstPlaylist(Path playlistParent, String storedLineOrRel) {
+        String s = storedLineOrRel == null ? "" : storedLineOrRel.trim().replace('\\','/');
+        Path p = Paths.get(s);
+        if (!p.isAbsolute()) p = playlistParent.resolve(p);
+        return p.normalize();
+    }
+
+    private boolean pathEqualsCI(Path a, Path b) {
+        String os = System.getProperty("os.name").toLowerCase();
+        return os.contains("win") ? a.toString().equalsIgnoreCase(b.toString()) : a.equals(b);
+    }
+    
+    private String normalizeRel(String rel) {
+        if (rel == null) return null;
+        // media-root-relative, forward slashes, no leading slash, trim whitespace
+        String s = rel.trim().replace('\\','/').replaceAll("/+", "/");
+        while (s.startsWith("/")) s = s.substring(1);
+        return s;
+    }
+
+    public boolean addFavorite(String relPath) {
+        try {
+            // Input expected from UI as media-root-relative (no "../")
+            String norm = normalizeRel(relPath);
+            if (norm == null || norm.isBlank()) return false;
+
+            // Resolve to absolute under media root
+            Path root = mediaRoot();
+            Path absTarget = root.resolve(norm).normalize();
+            if (!absTarget.startsWith(root)) return false; // safety
+
+            // Determine category from the resolved absolute path (first segment under media root)
+            Path rootRel = root.relativize(absTarget);
+            String category = categoryOfRel(rootRel.toString().replace('\\','/'));
+            if (category == null) return false;
+
+            Path playlist = resolveUserFavoritesPlaylist(category);
+            if (playlist == null) return false;
+            if (!ensureParentDirs(playlist)) return false;
+
+            List<String> lines = Files.exists(playlist)
+                    ? Files.readAllLines(playlist, StandardCharsets.UTF_8)
+                    : new ArrayList<>();
+
+            Path baseDir = playlist.getParent();
+            String storeLine = toPlaylistRelative(baseDir, absTarget); // ALWAYS "../..."
+
+            // idempotent: consider existing lines after resolving against playlist parent
+            boolean exists = lines.stream()
+                    .map(s -> resolveAgainstPlaylist(baseDir, normalizeRel(s)))
+                    .anyMatch(p -> pathEqualsCI(p, absTarget));
+            if (!exists) {
+                lines.add(storeLine);
+                Files.write(playlist, lines, StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            }
+            return true;
+        } catch (IOException e) {
+            log.error("[MediaService] addFavorite failed for {}", relPath, e);
+            return false;
+        }
+    }
+
+    public boolean removeFavorite(String relPath) {
+        try {
+            String norm = normalizeRel(relPath);
+            if (norm == null || norm.isBlank()) return false;
+
+            Path root = mediaRoot();
+            Path absTarget = root.resolve(norm).normalize();
+            if (!absTarget.startsWith(root)) return false;
+
+            // Determine category from resolved absolute target
+            Path rootRel = root.relativize(absTarget);
+            String category = categoryOfRel(rootRel.toString().replace('\\','/'));
+            if (category == null) return false;
+
+            Path playlist = resolveUserFavoritesPlaylist(category);
+            if (playlist == null || !Files.exists(playlist)) {
+                // nothing to remove; idempotent
+                return true;
+            }
+
+            List<String> lines = Files.readAllLines(playlist, StandardCharsets.UTF_8);
+            Path baseDir = playlist.getParent();
+
+            List<String> kept = new ArrayList<>(lines.size());
+            boolean removed = false;
+            for (String s : lines) {
+                String sn = normalizeRel(s);
+                Path lineAbs = resolveAgainstPlaylist(baseDir, sn);
+                if (pathEqualsCI(lineAbs, absTarget)) {
+                    removed = true; // drop it
+                    continue;
+                }
+                // keep original text as-is; we are not rewriting format here
+                kept.add(s);
+            }
+
+            if (removed) {
+                Files.write(playlist, kept, StandardCharsets.UTF_8,
+                        StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+            }
+            return true;
+        } catch (IOException e) {
+            log.error("[MediaService] removeFavorite failed for {}", relPath, e);
+            return false;
+        }
+    }
+
+    public List<String> listFavorites(String category) {
+        try {
+            Path playlist = resolveUserFavoritesPlaylist(category);
+            if (playlist == null || !Files.exists(playlist)) return List.of();
+
+            List<String> lines = Files.readAllLines(playlist, StandardCharsets.UTF_8);
+            Path baseDir = playlist.getParent();
+            Path root = mediaRoot();
+
+            List<String> out = new ArrayList<>(lines.size());
+            for (String s : lines) {
+                String sn = normalizeRel(s);
+
+                // Resolve any legacy absolute/root-rel lines to absolute, then re-emit as "../..."
+                Path abs = sn.startsWith("../") || sn.startsWith("./")
+                        ? resolveAgainstPlaylist(baseDir, sn)
+                        : root.resolve(sn).normalize();
+
+                if (!abs.startsWith(root)) continue; // safety
+                out.add(toPlaylistRelative(baseDir, abs)); // ensure "../..." on output
+            }
+            return out;
+        } catch (IOException e) {
+            log.error("[MediaService] listFavorites failed for category={}", category, e);
+            return List.of();
+        }
+    }
+
     private boolean isSupportedByConfig(Path p) {
         String name = p.getFileName() != null ? p.getFileName().toString() : "";
         return allowedMediaType.isSupportedMediaFile(name);

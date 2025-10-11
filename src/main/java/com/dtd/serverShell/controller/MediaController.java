@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -62,6 +63,35 @@ public class MediaController {
         this.mediaService = mediaService;
         this.userProfileService = userProfileService;
         this.allowedmediaType = allowedmediaType;
+    }
+    
+    static final class FavoriteRequest {
+        public String path; 
+        public String getPath() { return path; }
+        public void setPath(String p) { this.path = p; }
+    }
+    
+    @PostMapping(path = "/favorite", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Void> addFavorite(@RequestBody FavoriteRequest req) {
+        if (req == null || req.path == null || req.path.isBlank()) return ResponseEntity.badRequest().build();
+        boolean ok = mediaService.addFavorite(req.path);
+        return ok ? ResponseEntity.ok().build() : ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+
+    // IMPORTANT: Spring will read a JSON body on DELETE only if you annotate @RequestBody
+    @DeleteMapping(path = "/favorite", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Void> removeFavorite(@RequestBody FavoriteRequest req) {
+        if (req == null || req.path == null || req.path.isBlank()) return ResponseEntity.badRequest().build();
+        boolean ok = mediaService.removeFavorite(req.path);
+        return ok ? ResponseEntity.ok().build() : ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+
+    // Optional but enables persistence on reload if/when you hydrate the UI:
+    @GetMapping(path = "/favorites", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<String>> listFavorites(@RequestParam("category") String category) {
+        if (category == null || category.isBlank()) return ResponseEntity.badRequest().build();
+        List<String> items = mediaService.listFavorites(category);
+        return ResponseEntity.ok(items);
     }
     
     @GetMapping("/list")

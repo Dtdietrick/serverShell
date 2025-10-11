@@ -26,7 +26,7 @@ import { getIsLoading, setIsLoading, toggleMediaButtons } from "/ui/loading.js";
 
 const mediaTree = document.getElementById("mediaTree");
 let supportedExtensions = [];
-
+const _favoritesCache = new Map(); 
 const AUTOPLAY_ENABLED = true;
 
 /* A–Z toggle (UI & root only) */
@@ -35,10 +35,92 @@ const readGroupPref = () => (localStorage.getItem(GROUP_KEY) ?? "true") === "tru
 let groupAtRoot = readGroupPref(); 
 const autoplaySiblingCache = new Map();
 const isPlaylistFile = (name) => (name || "").toLowerCase().endsWith(".m3u");
+const isIndexLeaf = (name) => (name || "").toLowerCase() === "index.m3u8";
 
 setPlayMediaCallback((path, inPopup = true, fromPlaylist = true) => {
   return window.AppPlayer?.playMedia(path, inPopup, fromPlaylist);
 });
+
+function normalizeRelForClient(p) {
+  // Collapse slashes and strip any leading slash; keep media-root-relative
+  return String(p || "")
+    .replace(/\\/g, "/")
+    .replace(/\/{2,}/g, "/")
+    .replace(/^\/+/, "");
+}
+
+async function getFavoritesForCategory(category) {
+  if (!category) return new Set();
+  if (_favoritesCache.has(category)) return _favoritesCache.get(category);
+
+  try {
+    const res = await fetch(`/media/favorites?category=${encodeURIComponent(category)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const arr = await res.json(); // array of media-root-relative paths
+    const set = new Set(Array.isArray(arr) ? arr : []);
+    _favoritesCache.set(category, set);
+    return set;
+  } catch (e) {
+    console.warn("Failed to fetch favorites:", e);
+    const empty = new Set();
+    _favoritesCache.set(category, empty);
+    return empty;
+  }
+}
+
+function categoryOf(relPath) {
+  // expects paths like "Movies/SomeTitle/Season 1/Ep 01/index.m3u8"
+  const first = (relPath || "").split("/").filter(Boolean)[0] || "";
+  const cat = first.toLowerCase();
+  if (cat === "movies") return "Movies";
+  if (cat === "tv")     return "TV";
+  if (cat === "music")  return "Music";
+  return null; // unsupported categories won't expose star
+}
+
+function makeStarButton(relPath, { isFav = false } = {}) {
+  const rel = normalizeRelForClient(relPath);
+  const btn = document.createElement("button");
+  btn.className = "fav-star";
+  btn.setAttribute("aria-label", "favorite");
+
+  if (isFav) btn.classList.add("is-fav");
+  btn.innerHTML = btn.classList.contains("is-fav") ? "★" : "☆";
+  btn.title = btn.classList.contains("is-fav") ? "Remove from Favorites" : "Add to Favorites";
+
+  btn.onclick = async (e) => {
+    e.stopPropagation();
+    const category = categoryOf(rel);
+    if (!category) return;
+
+    const toFilled = !btn.classList.contains("is-fav");
+    btn.classList.toggle("is-fav", toFilled);
+    btn.innerHTML = toFilled ? "★" : "☆";
+    btn.title = toFilled ? "Remove from Favorites" : "Add to Favorites";
+
+    try {
+      const res = await fetch(`/media/favorite`, {
+        method: toFilled ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: rel })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const set = _favoritesCache.get(category) || new Set();
+      if (toFilled) set.add(rel); else set.delete(rel);
+      _favoritesCache.set(category, set);
+    } catch (err) {
+      // revert UI
+      btn.classList.toggle("is-fav", !toFilled);
+      btn.innerHTML = btn.classList.contains("is-fav") ? "★" : "☆";
+      btn.title = btn.classList.contains("is-fav") ? "Remove from Favorites" : "Add to Favorites";
+      console.warn("favorite toggle failed:", err);
+      alert("Could not update favorites.");
+    }
+  };
+
+  return btn;
+}
 
 function initGroupingToggle() {
   const btn = document.getElementById('toggle-grouping');
@@ -406,9 +488,8 @@ function renderListView({ folders, files, prefix, isGrouped = false, groupLabel 
 
   const query = getSearchQuery();
   const foldersOnly = filterFoldersByQuery(folders, query);
-  const filesForView = query ? [] : files; // ← no files when searching
+  const filesForView = query ? [] : files;
 
-  // Handle "no matches" UX when searching
   if (query && foldersOnly.length === 0) {
     const wrap = document.createElement("div");
     wrap.id = "media-scroll";
@@ -419,7 +500,6 @@ function renderListView({ folders, files, prefix, isGrouped = false, groupLabel 
 
   let ul;
   if (isGrouped && !groupLabel) {
-    // Pass files=[] so grouping is truly folder-only under search
     const letterGroups = groupFoldersByLetter(foldersOnly, [], query);
     ul = renderGroupedAZView(letterGroups, prefix);
   } else {
@@ -432,6 +512,9 @@ function renderListView({ folders, files, prefix, isGrouped = false, groupLabel 
   scrollContainer.id = "media-scroll";
   scrollContainer.appendChild(ul);
   mediaTree.appendChild(scrollContainer);
+
+  // Post-render favorite pass
+  decorateFavoritesInView(prefix);
 }
 
 // A–Z letter view
@@ -481,55 +564,89 @@ function renderGroupedAZView(letterGroups, prefix) {
 function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
   const ul = document.createElement("ul");
 
+  // Pin "*Playlists*" first (unchanged)
+  const pinName = "*Playlists*";
+  const pinned = [], others = [];
   for (const folderPath of sortedFolders) {
-    const parts = folderPath.split("/").filter(Boolean);
-    const folderName = parts.length > 0 ? parts[parts.length - 1] : folderPath;
-    const li = document.createElement("li");
+    const leaf = folderPath.split("/").filter(Boolean).pop() || folderPath;
+    (leaf === pinName ? pinned : others).push(folderPath);
+  }
+  const orderedFolders = [...pinned, ...others];
 
-    li.classList.add("folder");
-    li.textContent = folderName;
-
-    let fullPath = folderPath;
-    if (!folderPath.startsWith(prefix)) {
-      fullPath = prefix + folderPath;
-    }
+  // Folders (unchanged, no stars here)
+  for (const folderPath of orderedFolders) {
+    const leaf = folderPath.split("/").filter(Boolean).pop() || folderPath;
+    let fullPath = folderPath.startsWith(prefix) ? folderPath : prefix + folderPath;
     fullPath = fullPath.replace(/\/{2,}/g, "/");
 
-	li.onclick = () => renderFolder(fullPath.slice(0, -1));
-    console.log("Folder click:", fullPath.slice(0, -1));
+    const li = document.createElement("li");
+    li.classList.add("folder");
 
+    const label = document.createElement("span");
+    label.className = "media-label";
+    label.textContent = leaf;
+
+    li.appendChild(label);
+    li.onclick = () => renderFolder(fullPath.slice(0, -1));
     ul.appendChild(li);
   }
 
+  // Files (build rows; set data attributes; NO star yet)
   for (const filePath of sortedFiles) {
-    const segments = filePath.split("/");
-    const fileName = segments[segments.length - 1];
-    const li = document.createElement("li");
-
-    li.classList.add("file");
     const fullPath = filePath.startsWith(prefix) ? filePath : prefix + filePath;
-    const display = displayNameFor(fullPath);
-    li.textContent = display;
+    const rel = normalizeRelForClient(fullPath);
+    const leaf = rel.split("/").pop() || "";
+    const display = displayNameFor(rel);
 
-    if (fileName.toLowerCase().endsWith(".epub")) {
-      li.onclick = () => {
-        window.location.href = `/epubReader.html?file=${encodeURIComponent(fullPath)}`;
-      };
-    } else if (isPlaylistFile(fileName)) {
-      // NEW: open playlist via existing module, no extra UI needed
-      li.onclick = () => loadPlaylist(fullPath);
-    } else {
-      // existing media (index/m3u8, audio/video files, etc.)
-      const full = fullPath;
-      li.onclick = () => {
-        playAndStage(full);
-      };
+    const li = document.createElement("li");
+    li.classList.add("file", "media-row");
+    li.style.overflow = "visible";
+    li.dataset.rel = rel;                         
+    if (leaf.toLowerCase() === "index.m3u8") {
+      li.classList.add("is-index");               
     }
 
+    const label = document.createElement("span");
+    label.className = "media-label";
+    label.textContent = display;
+
+    if (leaf.toLowerCase().endsWith(".epub")) {
+      li.onclick = () => window.location.href = `/epubReader.html?file=${encodeURIComponent(rel)}`;
+    } else if (isPlaylistFile(leaf)) {
+      li.onclick = () => loadPlaylist(rel);
+    } else {
+      li.onclick = () => playAndStage(rel);
+    }
+
+    li.appendChild(label);
     ul.appendChild(li);
   }
 
   return ul;
+}
+
+async function decorateFavoritesInView(prefix) {
+  const prefixClean = normalizeRelForClient(prefix || "");
+  const category = categoryOf(prefixClean);
+  if (!category) return;
+
+  const favSet = await getFavoritesForCategory(category);
+
+  // Find only index rows (the ones eligible for ⭐)
+  const rows = document.querySelectorAll("#mediaTree #media-scroll li.file.is-index");
+  rows.forEach((li) => {
+    const rel = normalizeRelForClient(li.dataset.rel || "");
+    // skip if we somehow lack rel or already have a star
+    if (!rel || li.querySelector(".fav-star")) return;
+
+    const isFav = favSet.has(rel);
+    const star = makeStarButton(rel, { isFav });
+
+    // place to the left, just after the optional icon if present
+    const icon = li.querySelector(".media-icon");
+    if (icon && icon.parentElement === li) icon.after(star);
+    else li.insertBefore(star, li.firstChild);
+  });
 }
 
 function displayNameFor(path) {
