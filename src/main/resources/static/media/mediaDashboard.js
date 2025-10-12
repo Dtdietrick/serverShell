@@ -15,19 +15,10 @@ export async function handleJumpParam() {
 
   let seasonFolder;
   const last = parts[parts.length - 1].toLowerCase();
-  if (last === "index.m3u8" && parts.length >= 3) {
-    // .../Season X/<Episode>/index.m3u8  -> render .../Season X
-    seasonFolder = parts.slice(0, -2).join("/");
-  } else {
-    // generic fallback: render the parent folder
-    seasonFolder = parts.slice(0, -1).join("/");
-  }
+  seasonFolder = parts.slice(0, -1).join("/");
 
   // 1) Ensure explorer is initialized (safe even if already initialized)
-  await firstRender(root); // sets media root, binds UI, starts initial render
-
-  // 2) Render the correct folder (grouping is only for root)
-  renderFolder(seasonFolder, /*useGrouping*/ false);
+  await firstRender(seasonFolder); // sets media root, binds UI, starts initial render
 
   // 3) Stage autoplay from the *library* path and start playback
   setTimeout(() => {

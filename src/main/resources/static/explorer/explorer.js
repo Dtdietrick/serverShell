@@ -36,7 +36,22 @@ let groupAtRoot = readGroupPref();
 const autoplaySiblingCache = new Map();
 const isPlaylistFile = (name) => (name || "").toLowerCase().endsWith(".m3u");
 const isIndexLeaf = (name) => (name || "").toLowerCase() === "index.m3u8";
-
+const LS_FAV_KEY = (cat) => `explorer.favorites.${cat}`;
+function readLocalFavorites(category) {
+  try {
+    const raw = localStorage.getItem(LS_FAV_KEY(category));
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+function writeLocalFavorites(category, set) {
+  try {
+    localStorage.setItem(LS_FAV_KEY(category), JSON.stringify([...set]));
+  } catch {}
+}
 setPlayMediaCallback((path, inPopup = true, fromPlaylist = true) => {
   return window.AppPlayer?.playMedia(path, inPopup, fromPlaylist);
 });
@@ -51,20 +66,27 @@ function normalizeRelForClient(p) {
 
 async function getFavoritesForCategory(category) {
   if (!category) return new Set();
+
+  // 1) RAM cache
   if (_favoritesCache.has(category)) return _favoritesCache.get(category);
 
+  // 2) localStorage bootstrap (instant stars on cold session)
+  const localSet = readLocalFavorites(category);
+  _favoritesCache.set(category, new Set(localSet));   // clone to decouple
+
+  // 3) try server; if it works, merge & persist
   try {
     const res = await fetch(`/media/favorites?category=${encodeURIComponent(category)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const arr = await res.json(); // array of media-root-relative paths
-    const set = new Set(Array.isArray(arr) ? arr : []);
-    _favoritesCache.set(category, set);
-    return set;
+    const arr = await res.json(); // array of rel paths
+    const merged = new Set(localSet);
+    for (const p of (Array.isArray(arr) ? arr : [])) merged.add(p);
+    _favoritesCache.set(category, merged);
+    writeLocalFavorites(category, merged);
+    return merged;
   } catch (e) {
-    console.warn("Failed to fetch favorites:", e);
-    const empty = new Set();
-    _favoritesCache.set(category, empty);
-    return empty;
+    console.warn("Failed to fetch favorites (using local only):", e);
+    return _favoritesCache.get(category);
   }
 }
 
@@ -106,9 +128,10 @@ function makeStarButton(relPath, { isFav = false } = {}) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const set = _favoritesCache.get(category) || new Set();
-      if (toFilled) set.add(rel); else set.delete(rel);
-      _favoritesCache.set(category, set);
+	  const set = _favoritesCache.get(category) || new Set();
+	  if (toFilled) set.add(rel); else set.delete(rel);
+	  _favoritesCache.set(category, set);
+	  writeLocalFavorites(category, set);
     } catch (err) {
       // revert UI
       btn.classList.toggle("is-fav", !toFilled);

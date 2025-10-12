@@ -139,12 +139,14 @@
 }
 
 /* contain and ellipsize long text */
-.media-row .media-label #media-scroll{
+.media-row .media-label {                           /* [playlist.css] */
   flex: 1 1 auto;
-  min-width: 0;                   
-  overflow: hidden;               
-  white-space: nowrap;            
-  text-overflow: ellipsis;      
+  min-width: 0;            /* allow flex child to shrink in a row */
+  overflow: hidden;        /* contain inside the row */
+  white-space: normal;     /* allow wrapping (not nowrap) */
+  word-break: break-word;  /* break long tokens if needed */
+  overflow-wrap: anywhere; /* wrap anywhere as a last resort */
+
 }
 
 #playlist-items li:hover { background: #182030; }

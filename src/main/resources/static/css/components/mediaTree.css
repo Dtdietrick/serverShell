@@ -31,6 +31,7 @@ li {
   max-width: 100%;
   word-break: break-word;
   overflow-wrap: break-word;
+  overflow: hidden; 
   margin: 0.5rem 0;
 }
 
@@ -42,13 +43,14 @@ li::before,
 }
 
 li span,
-#mediaTree li span {
-  flex: 1 1 auto;
+#mediaTree li span {                 
+  flex: 1 1 auto;                   
+  min-width: 0;                      
   margin-left: 0.5rem;
   display: inline-block;
-  flex-shrink: 0;
+  white-space: normal;              
   word-break: break-word;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* Icons */
