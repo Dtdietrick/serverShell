@@ -1,4 +1,4 @@
-# ServerShell
+# ServerShell Version 1.1 LTS
 
 `serverShell` is a modular Spring Boot application that serves as a self-hosted, plugin-based media server. It provides a web-based interface for exploring and playing media files including audio, video, eBooks (EPUB), and emulated games.
 
@@ -109,7 +109,7 @@ EnvironmentFile=/etc/serverShell.env
 
 [Install]
 WantedBy=multi-user.target
-```
+
 ## TODO
 
 - [✅] security logs, who accessed what from where (v0.1.1)
@@ -140,9 +140,10 @@ WantedBy=multi-user.target
 - [✅] dark style quickfix (v1.0.0.8)
 - [✅] Full VOD stream (v1.0.0.8)
 - [✅] Initial N64 Emulator setup (v1.0.0.8)
-- [ ] User favorite playlist
-- [ ] Full N64 Emulator functionality
-- [ ] Fix Search Bar
+- [✅] Fix Search Bar (v1.0.0.9)
+- [✅] User favorite playlist (v1.1-LTS)
+- [ ] Full N64 Emulator functionality (Will fix and add to v1.1-LTS)
+
 Maybe List
 - [ ] ESLint/Checkstyle
 - [ ] gba custom controls
