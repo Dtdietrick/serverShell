@@ -142,6 +142,7 @@ WantedBy=multi-user.target
 - [✅] Initial N64 Emulator setup (v1.0.0.8)
 - [✅] Fix Search Bar (v1.0.0.9)
 - [✅] User favorite playlist (v1.1-LTS)
+- [ ] Basic Visualizer for Music Only Stream (Will add to v1.1-LTS)
 - [ ] Full N64 Emulator functionality (Will fix and add to v1.1-LTS)
 
 Maybe List
