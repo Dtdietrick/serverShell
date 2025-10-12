@@ -1,7 +1,5 @@
 The setup for a new server can be done with very little outside software setup and minimal code changes.
 
-- use the app
-
 - The server operates under some basic assumptions:
   2 variables need to be set:
     1) in the file /src/main/resources/application.properties
@@ -15,7 +13,7 @@ The setup for a new server can be done with very little outside software setup a
         right now the UI always assumes you have all 3, you do not need them, but the buttons will show up regardless, just will appear empty
     2)Any media is encoded properly to include .m4s segemnts, an index.m3u8, and an init.mp4 (encoding scripts for windows/linux can be shared upon request)
  - To use the emulators 2 steps are required
-    1) build the Docker image found here (docker is very simple, figure it out yourself)
+    1) build the Docker image found here (docker is very simple, so not documented here)
     https://github.com/Dtdietrick/retroArchContainer/tree/prod-stable
     2) in the file /src/main/resources/application-prod.properties
     retroarch.image=retro-prod
