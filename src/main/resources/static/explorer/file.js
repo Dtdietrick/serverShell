@@ -32,11 +32,35 @@ function getLetter(name) {
   return /^[A-Z0-9]$/i.test(c) ? c.toUpperCase() : "#";
 }
 
-// Sort alphabetically
+// Sort numerically then alphabetically
 export function sortItems(items) {
-  return [...items]
-    .filter(item => item && item.trim() !== "" && item !== "/")
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  if (!Array.isArray(items)) return [];
+
+  const sortKey = (p) => {
+    const parts = String(p || "").split("/").filter(Boolean);
+    if (parts.length === 0) return "";
+
+    let leaf = parts[parts.length - 1];
+
+    // If this is an "index.m3u8", sort by its parent folder name
+    if (leaf.toLowerCase() === "index.m3u8" && parts.length >= 2) {
+      leaf = parts[parts.length - 2];
+    }
+
+    // Nicer titles for .m3u playlist files (match your displayNameFor)
+    leaf = leaf.replace(/\.m3u$/i, "");
+
+    return leaf.toLowerCase();
+  };
+
+  return [...items].sort((a, b) => {
+    const ak = sortKey(a);
+    const bk = sortKey(b);
+    const cmp = ak.localeCompare(bk, undefined, { numeric: true, sensitivity: "base" });
+    if (cmp !== 0) return cmp;
+    // tie-break deterministically by full path
+    return String(a).localeCompare(String(b), undefined, { sensitivity: "base" });
+  });
 }
 
 export async function isAllowedMediaType(path) {
