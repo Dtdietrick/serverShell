@@ -9,6 +9,7 @@ const viewerPlayer = document.getElementById("viewer-player");
 
 // Playlist management variables
 let currentPlaylistName = null;
+let nowPlayingPath = null;
 let playlistOffset = 0;
 const playlistLimit = 10;
 let playlistLoading = false;
@@ -59,13 +60,24 @@ function moveLabelToViewer() {
 // helper: normalize server item -> { path, title?, duration? }
 function normalizeItem(item) {
   if (typeof item === "string") {
-    const leaf = item.split("/").filter(Boolean).slice(-2, -1)[0] || item.split("/").pop();
+    const segs = item.split("/").filter(Boolean);
+    let leaf = segs[segs.length - 1] || item;
+    const low = leaf.toLowerCase();
+    if (low === "index.m3u8" || low === "index.mp3" || low === "index.m4a") {
+      leaf = segs[segs.length - 2] || leaf;
+    }
     return { path: item, title: leaf, duration: null };
   }
   // defensive copy if server returns {path,title,duration}
+  const segs = (item.path || "").split("/").filter(Boolean);
+  let title = item.title || segs[segs.length - 1] || "";
+  const low = title.toLowerCase();
+  if (low === "index.m3u8" || low === "index.mp3" || low === "index.m4a") {
+    title = segs[segs.length - 2] || title;
+  }
   return {
     path: item.path,
-    title: item.title || (item.path?.split("/").pop() ?? ""),
+    title,
     duration: typeof item.duration === "number" ? item.duration : null
   };
 }
@@ -78,20 +90,37 @@ function renderLiForItem(nItem, idx) {
   `;
   li.onclick = () => {
     setActiveIndex(idx);
-    playMedia(nItem.path, true, true);
+    playSelected(nItem);
   };
   return li;
 }
 
+function playSelected(n) {
+  // record path
+  nowPlayingPath = n.path;                       
+  setActiveIndexByPath(nowPlayingPath);        
+  //label from title
+  setNowPlayingLabelText(n.title || n.path);     
+  playMedia(n.path, true, true);
+  // in case UI jitter, re-check on the next tick
+  queueMicrotask?.(() => setActiveIndexByPath(nowPlayingPath));
+}
+
 function setActiveIndex(nextIdx) {
   currentTrackIndex = nextIdx;
-  // toggle row highlight
   Array.from(playlistItems.children).forEach((li, i) => {
     li.classList.toggle("active", i === currentTrackIndex);
   });
-  
   const cur = currentPlaylist[currentTrackIndex];
   if (cur) setNowPlayingLabelText(cur.title || cur.path);
+}
+
+function setActiveIndexByPath(path) {
+  if (!path) return;
+  const i = currentPlaylist.findIndex(it => it.path === path);
+  if (i >= 0 && i !== currentTrackIndex) {
+    setActiveIndex(i);
+  }
 }
 
 // simple mm:ss or m:ss formatter
@@ -141,7 +170,7 @@ export function loadPlaylist(nameOrPath, reset = true) {
         // Autoplay the first on fresh reset
         if (reset && i === 0 && playlistOffset === 0) {
           setActiveIndex(0);
-          playMedia(n.path, true, true);
+          playSelected(n); 
         }
       });
 
@@ -168,14 +197,14 @@ function updateShuffleButton() {
 export function nextInPlaylist() {
   if (currentTrackIndex < currentPlaylist.length - 1) {
     setActiveIndex(currentTrackIndex + 1);
-    playMedia(currentPlaylist[currentTrackIndex].path, true, true);
+    playSelected(currentPlaylist[currentTrackIndex]); 
   } else {
     const before = currentPlaylist.length;
     loadPlaylist(currentPlaylistName, false);
     setTimeout(() => {
       if (currentPlaylist.length > before) {
         setActiveIndex(currentTrackIndex + 1);
-        playMedia(currentPlaylist[currentTrackIndex].path, true, true);
+        playSelected(currentPlaylist[currentTrackIndex]); 
       }
     }, 400);
   }
@@ -187,7 +216,7 @@ export function nextInPlaylist() {
 export function prevInPlaylist() {
   if (currentTrackIndex > 0) {
     setActiveIndex(currentTrackIndex - 1);
-    playMedia(currentPlaylist[currentTrackIndex].path, true, true);
+    playSelected(currentPlaylist[currentTrackIndex]);
   }
 }
 
@@ -199,7 +228,7 @@ export function shufflePlaylist() {
   let r;
   do { r = Math.floor(Math.random() * currentPlaylist.length); } while (r === currentTrackIndex);
   setActiveIndex(r);
-  playMedia(currentPlaylist[r].path, true, true);
+  playSelected(currentPlaylist[r]);
 }
 
 function ensurePopupHasPlayer() {

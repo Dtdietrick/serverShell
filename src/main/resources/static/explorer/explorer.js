@@ -33,6 +33,8 @@ const AUTOPLAY_ENABLED = true;
 const GROUP_KEY = "explorer.groupAtRoot";
 const readGroupPref = () => (localStorage.getItem(GROUP_KEY) ?? "true") === "true";
 let groupAtRoot = readGroupPref(); 
+let groupBindController = null;
+
 const autoplaySiblingCache = new Map();
 const isPlaylistFile = (name) => (name || "").toLowerCase().endsWith(".m3u");
 const isIndexLeaf = (name) => (name || "").toLowerCase() === "index.m3u8";
@@ -62,6 +64,17 @@ function normalizeRelForClient(p) {
     .replace(/\\/g, "/")
     .replace(/\/{2,}/g, "/")
     .replace(/^\/+/, "");
+}
+
+function getGroupingBtn() {
+  return document.getElementById('toggle-grouping');
+}
+
+function syncGroupingToggleUI() {
+  const btn = getGroupingBtn();
+  if (!btn) return;
+  groupAtRoot = readGroupPref();
+  btn.textContent = groupAtRoot ? 'A–Z: On' : 'A–Z: Off';
 }
 
 async function getFavoritesForCategory(category) {
@@ -146,22 +159,35 @@ function makeStarButton(relPath, { isFav = false } = {}) {
 }
 
 function initGroupingToggle() {
-  const btn = document.getElementById('toggle-grouping');
+  const btn = getGroupingBtn();
   if (!btn) return;
 
-  // Set initial label exactly once at startup
-  btn.textContent = groupAtRoot ? 'A–Z: On' : 'A–Z: Off';
+  // If bound before, abort old listener (safe if null)
+  if (groupBindController) groupBindController.abort();
+  groupBindController = new AbortController();
 
-  // Flip only on user click, then refresh label
-  btn.addEventListener('click', () => {
-    groupAtRoot = !groupAtRoot;
-    localStorage.setItem(GROUP_KEY, String(groupAtRoot));
-    btn.textContent = groupAtRoot ? 'A–Z: On' : 'A–Z: Off';
+  // Sync label to storage on every (re)bind
+  syncGroupingToggleUI();
 
-    // Re-render root (or whatever your current-root render call is)
-    rerenderRootList?.() ?? renderFolder(getMediaRoot(), groupAtRoot);
-  }, { passive: true });
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const next = !readGroupPref();
+    localStorage.setItem(GROUP_KEY, String(next));
+    groupAtRoot = next;
+    syncGroupingToggleUI();
+    rerenderRootList?.() ?? renderFolder(getMediaRoot(), next);
+  }, { passive: true, signal: groupBindController.signal });
 }
+
+const groupingObserver = new MutationObserver(() => {
+  const btn = getGroupingBtn();
+  // Only (re)bind if the node exists no listener or the node changed
+  if (btn && (!groupBindController || btn.textContent.includes('Toggle Folder Names'))) {
+    initGroupingToggle();
+  }
+});
+
+groupingObserver.observe(document.body, { childList: true, subtree: true });
 
 //helper to derive sibling order
 function deriveSiblingNamesFromListing({ folders, files }) {
@@ -235,7 +261,7 @@ function rerenderRootList() {
 
   const query = getSearchQuery();
   const searchedFolders = filterFoldersByQuery(folders, query);
-  const searchedFiles   = filterFilesByQuery(normalFiles, query); // ← CHANGED (was: query ? [] : normalFiles)
+  const searchedFiles   = filterFilesByQuery(normalFiles, query); 
 
   mediaTree.innerHTML = groupLabel ? `<h4>Group: ${groupLabel}</h4>` : "";
 
@@ -424,8 +450,7 @@ export async function firstRender(path) {
   setMediaRoot(path);
   setCurrentPath(path);
   toggleMediaButtons(false);
-  //util buttons
-  groupAtRoot = readGroupPref();
+  initGroupingToggle(); 
   initGroupingToggle();
   hideUtilButtons();
   autoplaySiblingCache.clear();
@@ -512,7 +537,7 @@ async function tryPlayFolderIfIndex(fullFolderPath) {
     if (!hasDirectIndex) return false;
 
     const playPath = `${fullFolderPath}/index.m3u8`;
-    await playAndStage(playPath);                       // ← CHANGED (was: set header + setCurrentPath + play + stage)
+    await playAndStage(playPath);                       
     return true;
   } catch (e) {
     console.log("tryPlayFolderIfIndex error:", e);
@@ -531,7 +556,7 @@ function renderListView({ folders, files, prefix, isGrouped = false, groupLabel 
   if (query && foldersOnly.length === 0 && filesForView.length === 0) {
     const wrap = document.createElement("div");
     wrap.id = "media-scroll";
-    wrap.innerHTML = `<p style="opacity:.8">No matching items for “${query}”.</p>`; // ← CHANGED copy
+    wrap.innerHTML = `<p style="opacity:.8">No matching items for “${query}”.</p>`;
     mediaTree.appendChild(wrap);
     return;
   }

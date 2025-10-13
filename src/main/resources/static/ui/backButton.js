@@ -45,7 +45,7 @@ export function updateBackButton(path) {
   if (toggle) {
     toggle.disabled = !atRoot;
     toggle.classList.toggle('disabled', !atRoot);
-    toggle.style.display = "inline-block"; // ensure it stays visible once shown
+    toggle.style.display = "inline-block";
   }
 
   console.log(`Back button state updated — path: ${path}, root: ${root}`);
