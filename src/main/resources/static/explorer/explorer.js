@@ -196,10 +196,26 @@ function filterFoldersByQuery(folders, query) {
   });
 }
 
+function filterFilesByQuery(files, query) {
+  const q = (query || "").trim().toLowerCase();
+  if (!q) return files;
+
+  return files.filter((f) => {
+	// Normalize relative path & compute label
+    const rel = normalizeRelForClient(f);
+    const display = (displayNameFor(rel) || "").toLowerCase();
+
+    // match immediate parent folder 
+    const parts = rel.split("/").filter(Boolean);
+    const parent = (parts.length >= 2 ? parts[parts.length - 2] : "").toLowerCase();
+
+    return display.includes(q) || parent.includes(q);
+  });
+}
+
 function rerenderRootList() {
   const root = getMediaRoot();
   const files = window.currentFileList || [];
-
   const prefix = (peekHistory() ? peekHistory() + "/" : "");
 
   const folders = [];
@@ -207,7 +223,6 @@ function rerenderRootList() {
 
   files.forEach((item) => {
     const name = item.startsWith(prefix) ? item.slice(prefix.length) : item;
-
     if (item.endsWith("/")) {
       if (!folders.includes(name)) folders.push(name);
     } else if (isSupportedMedia(name)) {
@@ -215,13 +230,12 @@ function rerenderRootList() {
     }
   });
 
-  // Preserve “Group: X” header if the user clicked a letter
   const groupLabel = getLastClickedGroupLabel();
-  const shouldGroup = !!(groupAtRoot && !groupLabel); 
+  const shouldGroup = !!(groupAtRoot && !groupLabel);
 
   const query = getSearchQuery();
   const searchedFolders = filterFoldersByQuery(folders, query);
-  const searchedFiles = query ? [] : normalFiles; // ← suppress files when searching for folders
+  const searchedFiles   = filterFilesByQuery(normalFiles, query); // ← CHANGED (was: query ? [] : normalFiles)
 
   mediaTree.innerHTML = groupLabel ? `<h4>Group: ${groupLabel}</h4>` : "";
 
@@ -510,24 +524,26 @@ function renderListView({ folders, files, prefix, isGrouped = false, groupLabel 
   mediaTree.innerHTML = groupLabel ? `<h4>Group: ${groupLabel}</h4>` : "";
 
   const query = getSearchQuery();
-  const foldersOnly = filterFoldersByQuery(folders, query);
-  const filesForView = query ? [] : files;
 
-  if (query && foldersOnly.length === 0) {
+  const foldersOnly = filterFoldersByQuery(folders, query);
+  const filesForView = filterFilesByQuery(files, query);
+
+  if (query && foldersOnly.length === 0 && filesForView.length === 0) {
     const wrap = document.createElement("div");
     wrap.id = "media-scroll";
-    wrap.innerHTML = `<p style="opacity:.8">No matching folders for “${query}”.</p>`;
+    wrap.innerHTML = `<p style="opacity:.8">No matching items for “${query}”.</p>`; // ← CHANGED copy
     mediaTree.appendChild(wrap);
     return;
   }
 
   let ul;
-  if (isGrouped && !groupLabel) {
+  //searching, ignore A–Z grouping 
+  if (!query && isGrouped && !groupLabel) {
     const letterGroups = groupFoldersByLetter(foldersOnly, [], query);
     ul = renderGroupedAZView(letterGroups, prefix);
   } else {
     const sortedFolders = sortItems(foldersOnly);
-    const sortedFiles = sortItems(filesForView);
+    const sortedFiles   = sortItems(filesForView);
     ul = renderStandardFolderView(sortedFolders, sortedFiles, prefix);
   }
 
@@ -715,7 +731,13 @@ export function getSearchQuery() {
 const searchInput = document.getElementById("media-search");
 if (searchInput) {
   searchInput.addEventListener("input", () => {
-    renderFolder(peekHistory());
+    const path = peekHistory(); // current folder
+    // If at root, let rerenderRootList handle grouping label preservation
+    if (path === getMediaRoot()) {
+      rerenderRootList();
+    } else {
+      renderFolder(path, /*useGrouping*/ false);
+    }
   });
 }
 
