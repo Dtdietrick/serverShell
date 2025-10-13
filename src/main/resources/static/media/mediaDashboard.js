@@ -1,6 +1,24 @@
 // File: mediaDashboard.js
 import { firstRender, renderFolder, stageAutoplayFor } from '/explorer/explorer.js';
 
+function getViewerMediaTitleEl() {
+  return document.getElementById('media-title');
+}
+
+function titleFromPath(p) {
+  const segs = String(p || "").split("/").filter(Boolean);
+  if (segs.length < 2) return "";
+
+  // if last segment is "index.m3u8", use parent folder
+  const leaf = segs[segs.length - 1];
+  if (/^index\./i.test(leaf)) {
+    return segs[segs.length - 2];
+  }
+
+  // otherwise return last segment
+  return segs[segs.length - 1];
+}
+
 // User dashboard to jump to media
 export async function handleJumpParam() {
   const params = new URLSearchParams(window.location.search);
@@ -26,5 +44,11 @@ export async function handleJumpParam() {
 
   // done walking; trigger autoplay + playback
   stageAutoplayFor(jumpTo);
+  const viewerH3 = getViewerMediaTitleEl();
+  
+  if (viewerH3) {
+    viewerH3.textContent = titleFromPath(jumpTo);
+  }
+  
   window.AppPlayer?.playMedia(jumpTo);
 }
