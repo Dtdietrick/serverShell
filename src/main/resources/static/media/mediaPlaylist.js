@@ -16,25 +16,37 @@ let playlistLoading = false;
 let playlistHasMore = true;
 let currentPlaylist = [];
 let currentTrackIndex = -1;
+let savedViewerHeading = null;
 
 //remember original player mount to move it into popup
 let originalPlayerParent = null;
+
+function getViewerMediaTitleEl() {
+  return document.getElementById('media-title');
+}
 
 function openPlaylistPopup() {
   playlistPopup.classList.add('open');   
   moveLabelToPopup();  
 }
 
-function setNowPlayingLabelText(title) {
+function setNowPlayingLabelText(text) {
   if (!playlistMediaLabel) return;
-  const t = (title ?? "").toString().trim();
-  playlistMediaLabel.textContent = t || "";
+  const val = (text ?? '').toString().trim();
+  playlistMediaLabel.textContent = val;
+
+  // If the popup is closed, keep the viewer title in sync
+  const viewerH3 = getViewerMediaTitleEl();
+  if (viewerH3 && !playlistMediaLabel.classList.contains('in-popup')) {
+    viewerH3.textContent = val;
+  }
 }
 
 function moveLabelToPopup() {
   if (!playlistMediaLabel || !playlistPopup) return;
-  // Put it just before the filter/search area if present, otherwise before items
-  const search = document.getElementById("playlist-search");
+
+  // Ensure the label element is placed back inside the popup UI (but we never move it out anymore)
+  const search = document.getElementById('playlist-search');
   if (search && search.parentElement === playlistPopup) {
     playlistPopup.insertBefore(playlistMediaLabel, search);
   } else if (playlistItems) {
@@ -42,19 +54,30 @@ function moveLabelToPopup() {
   } else {
     playlistPopup.appendChild(playlistMediaLabel);
   }
-  playlistMediaLabel.classList.add("in-popup");
-}
 
-function moveLabelToViewer() {
-  if (!playlistMediaLabel || !viewerPlayer) return;
-  const h3 = viewerPlayer.querySelector("h3");
-  if (h3) {
-    // place after the H3 so we don't fight your existing title logic
-    h3.insertAdjacentElement("afterend", playlistMediaLabel);
-  } else {
-    viewerPlayer.insertBefore(playlistMediaLabel, viewerPlayer.firstChild);
+  playlistMediaLabel.classList.add('in-popup');
+
+  // Optional: restore the viewer title to its original text when the popup opens
+  const viewerH3 = getViewerMediaTitleEl();
+  if (viewerH3 && viewerH3.dataset.origText) {
+    viewerH3.textContent = viewerH3.dataset.origText;
+    delete viewerH3.dataset.origText;
   }
-  playlistMediaLabel.classList.remove("in-popup");
+}
+function moveLabelToViewer() {
+  if (!playlistMediaLabel) return;
+
+  const viewerH3 = getViewerMediaTitleEl();
+  if (viewerH3) {
+    // stash original once so we can restore when popup opens (optional but nice)
+    if (!viewerH3.dataset.origText) {
+      viewerH3.dataset.origText = viewerH3.textContent || '';
+    }
+    viewerH3.textContent = playlistMediaLabel.textContent.trim();
+  }
+
+  // mark that the label is no longer in the popup so future updates mirror to #media-title
+  playlistMediaLabel.classList.remove('in-popup');
 }
 
 // helper: normalize server item -> { path, title?, duration? }
