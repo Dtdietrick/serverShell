@@ -55,13 +55,6 @@ li span,
 
 /* Icons */
 .folder::before { content: "📁"; }
-.file::before { content: "🎵"; }
+.video-file::before { content: "📽️"; }
+.music-file::before { content: "🎵"; }
 .playlist-file::before { content: "📜"; }
-.playlist-folder-icon::before {
-  content: "🎶";
-  color: orange;
-}
-.playlist-file-icon::before {
-  content: "📜";
-  color: orange;
-}

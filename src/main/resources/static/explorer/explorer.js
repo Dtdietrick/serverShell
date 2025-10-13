@@ -1,4 +1,4 @@
-// File: NEW explorer.js
+// File: explorer.js
 
 import {
   setLastClickedGroupLabel,
@@ -416,7 +416,7 @@ export async function firstRender(path) {
   hideUtilButtons();
   autoplaySiblingCache.clear();
   await getAllowedMediaList();
-  renderFolder(path, groupAtRoot); //honor toggle at root
+  await renderFolder(path, groupAtRoot); //honor toggle at root
 }
 
 export function renderFolder(path, useGrouping = false) {
@@ -424,72 +424,72 @@ export function renderFolder(path, useGrouping = false) {
   const apiPath = `/media/list?path=${encoded}`;
   setLastClickedGroupLabel("");
 
-  if (getIsLoading()) return;
+  if (getIsLoading()) return Promise.resolve();
 
   setIsLoading(true);
   if (mediaTree) mediaTree.innerHTML = "Loading...";
 
   console.log("Fetching folder contents:", apiPath);
 
-  fetch(apiPath)
-    .then((res) => {
-      if (res.status === 401) { window.location.href = "/login"; return; }
-      return res.json();
-    })
-    .then((files) => {
-      if (!files) return;
+    return fetch(apiPath)
+      .then((res) => {
+        if (res.status === 401) { window.location.href = "/login"; return; }
+        return res.json();
+      })
+      .then((files) => {
+        if (!files) return;
 
-      setFileList(files);
-	  window.currentFileList = files;
-      setCurrentPath(path);
+        setFileList(files);
+        window.currentFileList = files;
+        setCurrentPath(path);
 
-      const root = getMediaRoot();
-      if (path !== root && peekHistory() !== path) {
-        pushHistory(path);
-      }
-
-      updateSearchVisibility();
-      updateBackButton(path);
-
-      const prefix = peekHistory() ? peekHistory() + "/" : "";
-      const folders = [];
-      const normalFiles = [];
-
-      files.forEach((item) => {
-        const name = item.startsWith(prefix) ? item.slice(prefix.length) : item;
-        if (item.endsWith("/")) {
-          if (!folders.includes(name)) folders.push(name);
-        } else if (isSupportedMedia(name)) {
-          normalFiles.push(name);
+        const root = getMediaRoot();
+        if (path !== root && peekHistory() !== path) {
+          pushHistory(path);
         }
+
+        updateSearchVisibility();
+        updateBackButton(path);
+
+        const prefix = peekHistory() ? peekHistory() + "/" : "";
+        const folders = [];
+        const normalFiles = [];
+
+        files.forEach((item) => {
+          const name = item.startsWith(prefix) ? item.slice(prefix.length) : item;
+          if (item.endsWith("/")) {
+            if (!folders.includes(name)) folders.push(name);
+          } else if (isSupportedMedia(name)) {
+            normalFiles.push(name);
+          }
+        });
+
+        const isRoot = path === getMediaRoot();
+        const shouldGroup = isRoot && !!useGrouping;
+
+        mediaTree.innerHTML = getLastClickedGroupLabel()
+          ? `<h4>Group: ${getLastClickedGroupLabel()}</h4>` : "";
+
+        // cache sibling order for autoplay
+        const siblingNames = deriveSiblingNamesFromListing({ folders, files: normalFiles });
+        autoplaySiblingCache.set(path.replace(/\/+$/,'') || '', siblingNames);
+
+        renderListView({
+          folders: folders,
+          files: normalFiles,
+          prefix,
+          isGrouped: shouldGroup
+        });
+      })
+      .catch((err) => {
+        console.error("Error loading folder:", err);
+        mediaTree.innerHTML = "<p>Error loading media list.</p>";
+      })
+      .finally(() => {
+        setIsLoading(false);
+        toggleMediaButtons(true);
       });
-
-      const isRoot = path === getMediaRoot();
-      const shouldGroup = isRoot && !!useGrouping;
-
-      mediaTree.innerHTML = getLastClickedGroupLabel()
-        ? `<h4>Group: ${getLastClickedGroupLabel()}</h4>` : "";
-
-	  //cache sibling order for autoplay
-	  const siblingNames = deriveSiblingNamesFromListing({ folders, files: normalFiles });
-	  autoplaySiblingCache.set(path.replace(/\/+$/,'') || '', siblingNames);
-		
-      renderListView({
-        folders: folders,
-        files: normalFiles,
-        prefix,
-        isGrouped: shouldGroup
-      });
-    })
-    .catch((err) => {
-      console.error("Error loading folder:", err);
-      mediaTree.innerHTML = "<p>Error loading media list.</p>";
-    })
-    .finally(() => {
-      setIsLoading(false);
-      toggleMediaButtons(true);
-    });
-}
+  }
 
 async function tryPlayFolderIfIndex(fullFolderPath) {
   try {
@@ -587,7 +587,7 @@ function renderGroupedAZView(letterGroups, prefix) {
 function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
   const ul = document.createElement("ul");
 
-  // Pin "*Playlists*" first (unchanged)
+  // Pin "*Playlists*" first 
   const pinName = "*Playlists*";
   const pinned = [], others = [];
   for (const folderPath of sortedFolders) {
@@ -596,7 +596,7 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
   }
   const orderedFolders = [...pinned, ...others];
 
-  // Folders (unchanged, no stars here)
+  // Folders
   for (const folderPath of orderedFolders) {
     const leaf = folderPath.split("/").filter(Boolean).pop() || folderPath;
     let fullPath = folderPath.startsWith(prefix) ? folderPath : prefix + folderPath;
@@ -621,13 +621,27 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
     const leaf = rel.split("/").pop() || "";
     const display = displayNameFor(rel);
 
-    const li = document.createElement("li");
-    li.classList.add("file", "media-row");
-    li.style.overflow = "visible";
-    li.dataset.rel = rel;                         
-    if (leaf.toLowerCase() === "index.m3u8") {
-      li.classList.add("is-index");               
-    }
+	const li = document.createElement("li");
+	li.classList.add("media-row");       
+	li.style.overflow = "visible";
+	li.dataset.rel = rel;
+
+	//check top level for icon
+	const topLevel = rel.replace(/^\/+/, "").split("/")[0] || "";
+	const isMusicTop = topLevel.toLowerCase() === "music";
+	li.dataset.top = topLevel; 
+	
+	//check if playlist or file
+	const lower = leaf.toLowerCase();
+	if (isPlaylistFile(leaf.toLowerCase())) {
+	  li.classList.add("playlist-file");  
+	  li.dataset.kind = "playlist";
+	} else {
+		li.classList.add("file"); 
+		li.classList.add(isMusicTop ? "music-file" : "video-file");
+		li.dataset.kind = "file";
+		li.classList.add("is-index"); 
+	}
 
     const label = document.createElement("span");
     label.className = "media-label";

@@ -4,6 +4,8 @@
 const playlistPopup = document.getElementById("playlist-popup");
 const popupPlayer = document.getElementById("popup-player");
 const playlistItems = document.getElementById("playlist-items");
+const playlistMediaLabel = document.getElementById("playlist-media"); 
+const viewerPlayer = document.getElementById("viewer-player"); 
 
 // Playlist management variables
 let currentPlaylistName = null;
@@ -18,7 +20,40 @@ let currentTrackIndex = -1;
 let originalPlayerParent = null;
 
 function openPlaylistPopup() {
-  playlistPopup.classList.add('open');     
+  playlistPopup.classList.add('open');   
+  moveLabelToPopup();  
+}
+
+function setNowPlayingLabelText(title) {
+  if (!playlistMediaLabel) return;
+  const t = (title ?? "").toString().trim();
+  playlistMediaLabel.textContent = t || "";
+}
+
+function moveLabelToPopup() {
+  if (!playlistMediaLabel || !playlistPopup) return;
+  // Put it just before the filter/search area if present, otherwise before items
+  const search = document.getElementById("playlist-search");
+  if (search && search.parentElement === playlistPopup) {
+    playlistPopup.insertBefore(playlistMediaLabel, search);
+  } else if (playlistItems) {
+    playlistPopup.insertBefore(playlistMediaLabel, playlistItems);
+  } else {
+    playlistPopup.appendChild(playlistMediaLabel);
+  }
+  playlistMediaLabel.classList.add("in-popup");
+}
+
+function moveLabelToViewer() {
+  if (!playlistMediaLabel || !viewerPlayer) return;
+  const h3 = viewerPlayer.querySelector("h3");
+  if (h3) {
+    // place after the H3 so we don't fight your existing title logic
+    h3.insertAdjacentElement("afterend", playlistMediaLabel);
+  } else {
+    viewerPlayer.insertBefore(playlistMediaLabel, viewerPlayer.firstChild);
+  }
+  playlistMediaLabel.classList.remove("in-popup");
 }
 
 // helper: normalize server item -> { path, title?, duration? }
@@ -54,6 +89,9 @@ function setActiveIndex(nextIdx) {
   Array.from(playlistItems.children).forEach((li, i) => {
     li.classList.toggle("active", i === currentTrackIndex);
   });
+  
+  const cur = currentPlaylist[currentTrackIndex];
+  if (cur) setNowPlayingLabelText(cur.title || cur.path);
 }
 
 // simple mm:ss or m:ss formatter
@@ -174,6 +212,7 @@ function ensurePopupHasPlayer() {
     popupPlayer.appendChild(player);
     player.classList.add("in-popup");
   }
+  moveLabelToPopup();
 }
 
 function pausePlayback() {
@@ -210,6 +249,8 @@ export function closePlaylist() {
     player.classList.remove("in-popup");
   }
 
+  moveLabelToViewer();
+  
   currentPlaylist = [];
   currentTrackIndex = -1;
   currentPlaylistName = null;

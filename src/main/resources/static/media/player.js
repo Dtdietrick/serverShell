@@ -38,7 +38,6 @@
         dirPath = sourcePath.substring(0, lastSlash);
       }
 
-      // IMPORTANT: do NOT strip a **leading** slash if your backend expects it.
       // Only collapse duplicate slashes and remove a single trailing slash.
       dirPath = dirPath.replace(/\/{2,}/g, '/').replace(/\/$/, '');
       if (!dirPath.startsWith('/')) {
@@ -65,7 +64,7 @@
         return;
       }
 
-      // --- NEW: tolerate empty body / wrong content-type when body is empty ---
+      // --- tolerate empty body / wrong content-type when body is empty ---
       let tracks = [];
       const ct = (r.headers.get('content-type') || '').toLowerCase();
       if (ct.includes('application/json')) {
@@ -95,7 +94,7 @@
 		track.kind  = 'subtitles';
 		track.label = t.label || `Subtitles ${index + 1}`;
 
-		// NEW: ensure srclang exists (required for subtitles)
+		// ensure srclang exists (required for subtitles)
 		track.srclang = t.lang || 'en'; // <-- fallback if controller provided none
 
 		track.src = t.src.startsWith('http')
@@ -171,15 +170,20 @@
 
   async function playMedia(filenameOrFolder) {
     await stopAllMedia();
-    state.sourcePath = filenameOrFolder; // <- track the logical input path
+	// track logical input path
+    state.sourcePath = filenameOrFolder; 
 
-	//refresh for play next
+	// refresh for play next
 	const oldPrompt = document.getElementById('next-prompt');
 	if (oldPrompt) oldPrompt.remove();
 	
     const container = document.getElementById('player-container');
     if (!container) throw new Error('player container missing');
 
+	const inPopup =
+	  document.getElementById('playlist-popup')?.classList.contains('open') &&
+	  document.getElementById('playlist-popup')?.contains(container);
+	  
     const name = filenameOrFolder.split('/').pop().replace(/\.[^/.]+$/, '');
     container.innerHTML = `<div style="opacity:.7">Loading <b>${name}</b>…</div>`;
 
@@ -190,7 +194,22 @@
 
       state.m3u8 = absM3u8;
 
-      container.innerHTML = `<video id="media-player" controls playsinline crossorigin style="width:100%;max-height:70vh;"></video>`;
+	  if (inPopup) { 
+	    
+	    container.classList.add('in-popup');
+
+	    
+	    container.innerHTML = `
+	      <video id="media-player" controls playsinline crossorigin
+	             style="width:100%;height:100%;max-height:100%;object-fit:contain;display:block;"></video>`;
+	  } else {
+	    container.classList.remove('in-popup');
+
+	    container.innerHTML = `
+	      <video id="media-player" controls playsinline crossorigin
+	             style="width:100%;max-height:70vh;display:block;"></video>`;
+	  }
+	  
       const video = document.getElementById('media-player');
       state.video = video;
 

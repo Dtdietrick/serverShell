@@ -1,30 +1,30 @@
-//File: mediaDashboard.js
+// File: mediaDashboard.js
 import { firstRender, renderFolder, stageAutoplayFor } from '/explorer/explorer.js';
 
-//User dashboard to jump to media
+// User dashboard to jump to media
 export async function handleJumpParam() {
   const params = new URLSearchParams(window.location.search);
   const jumpTo = params.get("jumpTo");
   if (!jumpTo) return;
 
   const parts = jumpTo.split("/").filter(Boolean);
-  if (!parts.length) return;
+  if (parts.length < 2) return;
 
-  // Derive root and season folder from the jump path
-  const root = parts[0]; // e.g., "TV", "Movies", etc.
+  // "TV" | "Movies" | "Music"
+  const root = parts[0];      
+  // stop before "index.m3u8"
+  const endIdx = parts.length - 1;      
+  // render root first
+  await firstRender(root);              
 
-  let seasonFolder;
-  const last = parts[parts.length - 1].toLowerCase();
-  seasonFolder = parts.slice(0, -1).join("/");
+  // walk directory tree
+  let acc = root;                       
+  for (let i = 1; i < endIdx; i++) {
+    acc = `${acc}/${parts[i]}`.replace(/\/{2,}/g, "/");
+    await renderFolder(acc);           
+  }
 
-  // 1) Ensure explorer is initialized (safe even if already initialized)
-  await firstRender(seasonFolder); // sets media root, binds UI, starts initial render
-
-  // 3) Stage autoplay from the *library* path and start playback
-  setTimeout(() => {
-    stageAutoplayFor(jumpTo);
-    if (window.AppPlayer) {
-      window.AppPlayer.playMedia(jumpTo);
-    }
-  }, 150);
+  // done walking; trigger autoplay + playback
+  stageAutoplayFor(jumpTo);
+  window.AppPlayer?.playMedia(jumpTo);
 }
