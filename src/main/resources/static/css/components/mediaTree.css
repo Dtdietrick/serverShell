@@ -1,14 +1,8 @@
 /* File:mediaTree.css */
 #mediaTree {
-  flex: 0 0 25%;                          
- 
-  align-self: stretch;                     
-  min-height: 0;                           
-  max-height: calc(100vh - 3rem);         
-  overflow-y: auto;                        
-  padding: 0.5rem;
-  box-sizing: border-box;
-  border-right: 1px solid #2b3140;         
+  flex: 1 1 auto;
+  max-width: initial;
+  overflow: visible;         
 }
 
 #mediaTree ul {
@@ -18,6 +12,40 @@
   padding-left: 0;
   list-style: none;
   margin: 0;
+}
+
+#tree-pane {
+  flex: 0 0 25%;               
+  max-width: 25%;
+  display: flex;
+  flex-direction: column;       
+  min-height: 0;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;             /
+  border-right: 1px solid #2b3140;
+}
+
+#mediaTree-label.group-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.25rem 0.5rem;
+  margin: 0 0 0.25rem 0;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  color: var(--muted, #c3c7d1);
+  border-bottom: 1px solid #2b3140;
+  background: var(--surface-0, #0b0e14);
+}
+
+#mediaTree-label.group-label[data-has-label="true"]::before {
+  content: "Path: ";
+  opacity: 0.8;
+  margin-right: 0.25rem;
+}
+
+#mediaTree-label.group-label:empty {
+  display: none;
 }
 
 #mediaTree li,

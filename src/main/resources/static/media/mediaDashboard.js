@@ -1,5 +1,6 @@
 // File: mediaDashboard.js
-import { firstRender, renderFolder, stageAutoplayFor } from '/explorer/explorer.js';
+import { firstRender, renderFolder, stageAutoplayFor, renderGroupLabel } from '/explorer/explorer.js';
+import { setLastClickedGroupLabel } from '/explorer/path.js';
 
 function getViewerMediaTitleEl() {
   return document.getElementById('media-title');
@@ -27,7 +28,7 @@ export async function handleJumpParam() {
 
   const parts = jumpTo.split("/").filter(Boolean);
   if (parts.length < 2) return;
-
+  
   // "TV" | "Movies" | "Music"
   const root = parts[0];      
   // stop before "index.m3u8"
@@ -42,6 +43,10 @@ export async function handleJumpParam() {
     await renderFolder(acc);           
   }
 
+  const parentOfEpisode = (endIdx - 1) >= 0 ? parts[endIdx - 1] : "";
+  setLastClickedGroupLabel(parentOfEpisode);
+  renderGroupLabel();
+  
   // done walking; trigger autoplay + playback
   stageAutoplayFor(jumpTo);
   const viewerH3 = getViewerMediaTitleEl();

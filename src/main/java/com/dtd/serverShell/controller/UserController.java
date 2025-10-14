@@ -53,6 +53,7 @@ public class UserController {
 
         return ResponseEntity.ok("Password updated.");
     }
+    
     @GetMapping("/dashboard")
     public ResponseEntity<Map<String, Object>> getDashboard(Principal principal) {
         if (principal == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -60,7 +61,14 @@ public class UserController {
         Optional<AppUser> userOpt = userRepository.findByUsername(principal.getName());
         return userOpt.map(user -> {
             Map<String, Object> dashboard = new HashMap<>();
-            dashboard.put("recentViews", user.getRecentViews());
+
+            // legacy: keep the raw string list
+            dashboard.put("recentViews", user.getRecentViews()); // unchanged
+            // build a richer table-friendly array
+            var detailed = user.getRecentViews() == null ? java.util.List.<Map<String, String>>of()
+                : user.getRecentViews().stream().map(UserController::toDetailedViewRow).toList();
+            dashboard.put("recentViewsDetailed", detailed);
+
             dashboard.put("recentRomSaves", user.getRecentRomSaves());
             return ResponseEntity.ok(dashboard);
         }).orElse(ResponseEntity.notFound().build());
@@ -75,5 +83,35 @@ public class UserController {
 
         AppUser user = userOpt.get();
         return ResponseEntity.ok(Map.of("username", user.getUsername(), "role", user.getRole()));
+    }
+    
+    private static Map<String, String> toDetailedViewRow(String raw) {
+        String path = normalize(raw);
+        String folderName = extractSecondSegment(path);    
+        String itemName   = extractDisplayItem(path);       
+        return Map.of(
+            "path", path,
+            "folderName", folderName == null ? "" : folderName,
+            "itemName", itemName == null ? "" : itemName
+        );
+    }
+    
+    private static String normalize(String p) {
+        if (p == null) return "";
+        String s = p.replace('\\', '/');
+        if (s.endsWith("/index.m3u8")) s = s.substring(0, s.length() - "/index.m3u8".length());
+        if (s.endsWith("/")) s = s.substring(0, s.length() - 1);
+        return s;
+    }
+
+    private static String extractSecondSegment(String p) {
+        String[] parts = p.split("/"); 
+        return parts.length >= 2 ? parts[1] : "";
+    }
+
+    private static String extractDisplayItem(String p) {
+        String[] parts = p.split("/");
+        if (parts.length == 0) return "";
+        return parts[parts.length - 1];
     }
 }

@@ -58,6 +58,27 @@ setPlayMediaCallback((path, inPopup = true, fromPlaylist = true) => {
   return window.AppPlayer?.playMedia(path, inPopup, fromPlaylist);
 });
 
+export function renderGroupLabel() {
+  const el = document.getElementById("mediaTree-label");
+  if (!el) return;
+  const label = getLastClickedGroupLabel?.() || "";
+  if (label && label.trim()) {
+    el.textContent = label.trim();
+    el.setAttribute("data-has-label", "true");
+  } else {
+    el.textContent = "";
+    el.removeAttribute("data-has-label");
+  }
+}
+
+document.addEventListener("explorer:navigated", (e) => {
+  const path = String(e.detail?.path || "");
+  const segs = path.split("/").filter(Boolean);
+  const leaf = segs[segs.length - 1] || "";
+  setLastClickedGroupLabel(leaf);
+  renderGroupLabel();
+});
+
 function normalizeRelForClient(p) {
   // Collapse slashes and strip any leading slash; keep media-root-relative
   return String(p || "")
@@ -446,6 +467,8 @@ window.stageAutoplayFor = stageAutoplayFor;
 
 // Entry point for root-level navigation
 export async function firstRender(path) {
+  setLastClickedGroupLabel("");
+  renderGroupLabel();
   resetHistory(path);
   setMediaRoot(path);
   setCurrentPath(path);
@@ -461,7 +484,11 @@ export async function firstRender(path) {
 export function renderFolder(path, useGrouping = false) {
   const encoded = encodeURIComponent(path);
   const apiPath = `/media/list?path=${encoded}`;
-  setLastClickedGroupLabel("");
+  
+  if (path === getMediaRoot()) {
+    setLastClickedGroupLabel("");
+	renderGroupLabel();
+  }
 
   if (getIsLoading()) return Promise.resolve();
 
@@ -489,7 +516,8 @@ export function renderFolder(path, useGrouping = false) {
 
         updateSearchVisibility();
         updateBackButton(path);
-
+		document.dispatchEvent(new CustomEvent("explorer:navigated", { detail: { path } }));
+		
         const prefix = peekHistory() ? peekHistory() + "/" : "";
         const folders = [];
         const normalFiles = [];
@@ -601,12 +629,18 @@ function renderGroupedAZView(letterGroups, prefix) {
         return p.replace(/\/{2,}/g, "/");
       });
       if (realFolders.length === 1 && fullFilePaths.length === 0) {
+		// record label for the auto-entered folder
+		const only = realFolders[0];
+		const leaf = only.replace(/\/+$/,'').split('/').filter(Boolean).pop() || "";
+		setLastClickedGroupLabel(leaf);
+		renderGroupLabel();
         // navigate to the single real folder
         return renderFolder(realFolders[0].slice(0, -1));
       }
 
       // Otherwise, show the filtered list in-place (still at root; no history push)
       setLastClickedGroupLabel(letter);
+	  renderGroupLabel();
       setCurrentPath(prefix);
 
       renderListView({
@@ -651,7 +685,11 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
     label.textContent = leaf;
 
     li.appendChild(label);
-    li.onclick = () => renderFolder(fullPath.slice(0, -1));
+	li.onclick = () => {
+	  setLastClickedGroupLabel(leaf);
+	  renderGroupLabel();
+	  renderFolder(fullPath.slice(0, -1));
+	};
     ul.appendChild(li);
   }
 

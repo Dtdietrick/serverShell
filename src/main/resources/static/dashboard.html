@@ -15,7 +15,15 @@
     </p>
     
     <h2>Recently Viewed Items</h2>
-    <ul id="recent-views"></ul>
+	<table id="recent-views" role="grid" class="striped">
+	  <thead>
+	    <tr>
+	      <th style="width: 38ch;">Folder</th>
+	      <th>Item</th>
+	    </tr>
+	  </thead>
+	  <tbody></tbody>
+	</table>
 
    <!--  <h2>ROM Saves</h2>  -->
    <!--  <ul id="rom-saves"></ul>  -->
@@ -37,21 +45,44 @@
   <script src="/util/adminDashboard.js"></script>
   
   <script>
-    fetch('/user/dashboard')
-      .then(res => res.json())
-      .then(data => {
-        const viewsList = document.getElementById('recent-views');
-        data.recentViews.forEach(item => {
-          const li = document.createElement('li');
-          const a = document.createElement('a');
+	fetch('/user/dashboard')
+	    .then(res => res.json())
+	    .then(data => {
+	      const table = document.getElementById('recent-views');
+	      const tbody = table.querySelector('tbody');
 
-          a.href = `/index.html?jumpTo=${encodeURIComponent(item)}`;
-		  const parts = item.split('/');
-		  a.textContent = parts[parts.length - 1];
+	      if (Array.isArray(data.recentViewsDetailed) && data.recentViewsDetailed.length) {
+	        // New detailed rendering
+	        data.recentViewsDetailed.forEach(row => {
+	          const tr = document.createElement('tr');
 
-          li.appendChild(a);
-          viewsList.appendChild(li);
-        });
+	          const tdFolder = document.createElement('td');
+	          tdFolder.textContent = row.folderName || "";
+
+	          const tdItem = document.createElement('td');
+	          const a = document.createElement('a');
+	          a.href = `/index.html?jumpTo=${encodeURIComponent(row.path)}`;
+	          a.textContent = row.itemName || row.path.split('/').pop();
+	          tdItem.appendChild(a);
+
+	          tr.appendChild(tdFolder);
+	          tr.appendChild(tdItem);
+	          tbody.appendChild(tr);
+	        });
+	      } else {
+	        // Legacy fallback (old array of strings)
+	        const viewsList = document.createElement('ul');
+	        data.recentViews?.forEach(item => {
+	          const li = document.createElement('li');
+	          const a = document.createElement('a');
+	          a.href = `/index.html?jumpTo=${encodeURIComponent(item)}`;
+	          const parts = String(item).split('/');
+	          a.textContent = parts[parts.length - 1];
+	          li.appendChild(a);
+	          viewsList.appendChild(li);
+	        });
+	        table.replaceWith(viewsList);
+	      }
 
         const savesList = document.getElementById('rom-saves');
         if (data.recentRomSaves) {

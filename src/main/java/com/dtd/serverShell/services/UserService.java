@@ -54,8 +54,8 @@ public class UserService {
 
             history.remove(key);
             history.add(0, key);
-            if (history.size() > 10) {
-                history = history.subList(0, 10);
+            if (history.size() > 20) {
+                history = history.subList(0, 20);
             }
 
             user.setRecentViews(history);

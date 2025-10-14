@@ -15,7 +15,7 @@ import {
 } from "/explorer/path.js";
 
 import { disableBackButton } from "/ui/loading.js";
-import { renderFolder } from "/explorer/explorer.js";
+import { renderFolder, renderGroupLabel } from "/explorer/explorer.js";
 
 const backButton = document.querySelector(".back-btn");
 const GROUP_KEY = "explorer.groupAtRoot";
@@ -27,7 +27,12 @@ backButton.onclick = () => {
   if (!prev) return;
 
   // clear any letter tag
-  setLastClickedGroupLabel(""); 
+  const parts = (prev || "").split("/").filter(Boolean);
+  const label = (prev === root) ? "" : (parts[parts.length - 1] || "");
+  setLastClickedGroupLabel(label);
+  renderGroupLabel();
+  
+  //set path
   setCurrentPath(prev);
 
   const groupPref = (localStorage.getItem("explorer.groupAtRoot") ?? "true") === "true";
