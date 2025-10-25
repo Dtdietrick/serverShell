@@ -121,6 +121,17 @@ public class EmulatorController {
                  "--mount", "type=bind,source=" + pulseSocketPath + ",target=/tmp/pulseaudio.socket,readonly",
                  "-p", vncPort + ":52300",
                  "-p", audioPort + ":8081",
+                 
+                 //GPU
+                 "--device", "/dev/dri:/dev/dri",
+                 "-v", "/run/udev:/run/udev:ro",
+                 "--group-add", "993",
+                 "--group-add", "44",
+                 "--cap-add=SYS_ADMIN",
+                 "--cap-add=MKNOD",
+                 "--cap-add=SYS_RAWIO",
+                 "--security-opt", "apparmor=unconfined",
+                 "--security-opt", "seccomp=unconfined",
                  //so container can monitor live port (internal bound to 52300)
                  "-e", "PULSE_SERVER=unix:/tmp/pulseaudio.socket",
                  //cookie is prewarmed in host dir

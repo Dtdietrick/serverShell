@@ -144,8 +144,9 @@ WantedBy=multi-user.target
 - [✅] User favorite playlist (v1.1-LTS)
 - [✅] Playlist shows currently playing media label (v1.1-LTS)
 - [✅] JumpTo media back button fix (v1.1-LTS)
+- [✅] Full N64 Emulator functionality (v1.1-LTS)
+- [ ] Bluetooth Bridge for N64 Emulator (Will add to v1.1-LTS)
 - [ ] Basic Visualizer for Music Only Stream (Will add to v1.1-LTS)
-- [ ] Full N64 Emulator functionality (Will fix and add to v1.1-LTS)
 
 Maybe List
 - [ ] ESLint/Checkstyle
