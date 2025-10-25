@@ -117,21 +117,31 @@ public class EmulatorController {
                  //bind save & config paths
                  "-v", userPaths.configPath.toAbsolutePath().toAbsolutePath() + ":/config",
                  "-v", userPaths.savePath.toAbsolutePath()  + ":/save",
+                 "--pid=host",
+                 "-v", "/sys/kernel/debug:/sys/kernel/debug:ro",
                  //bind & mount ports
                  "--mount", "type=bind,source=" + pulseSocketPath + ",target=/tmp/pulseaudio.socket,readonly",
                  "-p", vncPort + ":52300",
                  "-p", audioPort + ":8081",
-                 
                  //GPU
                  "--device", "/dev/dri:/dev/dri",
                  "-v", "/run/udev:/run/udev:ro",
                  "--group-add", "993",
                  "--group-add", "44",
-                 "--cap-add=SYS_ADMIN",
-                 "--cap-add=MKNOD",
-                 "--cap-add=SYS_RAWIO",
-                 "--security-opt", "apparmor=unconfined",
+                 "-e", "LIBGL_ALWAYS_SOFTWARE=0",
+                 "-e", "MESA_LOADER_DRIVER_OVERRIDE=radeonsi",   
+                 //VT manager
+                 "--device", "/dev/tty0", 
+                 //VT Devices
+                 "--device", "/dev/tty1", 
+                 "--device", "/dev/tty7",
+                 //control node for tty ioctls   
+                 "--device", "/dev/tty",
+                 // allow Xorg to perform VT/tty ioctls
+                 "--cap-add=SYS_TTY_CONFIG",
+                 "--cap-add=SYS_ADMIN", 
                  "--security-opt", "seccomp=unconfined",
+                 "--security-opt", "apparmor=unconfined",
                  //so container can monitor live port (internal bound to 52300)
                  "-e", "PULSE_SERVER=unix:/tmp/pulseaudio.socket",
                  //cookie is prewarmed in host dir
