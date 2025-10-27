@@ -145,7 +145,7 @@ WantedBy=multi-user.target
 - [✅] Playlist shows currently playing media label (v1.1-LTS)
 - [✅] JumpTo media back button fix (v1.1-LTS)
 - [✅] Full N64 Emulator functionality (v1.1-LTS)
-- [ ] Bluetooth Bridge for N64 Emulator (Will add to v1.1-LTS)
+- [✅] Bluetooth Bridge for N64 Emulator (v1.1-LTS)
 - [ ] Basic Visualizer for Music Only Stream (Will add to v1.1-LTS)
 
 Maybe List
