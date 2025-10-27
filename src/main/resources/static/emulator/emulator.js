@@ -181,8 +181,10 @@ export function launchEmulator(rom, button) {
 	  "        \"  </div>\" +",
 	  "        \"  <iframe id=\\\"vnc-frame\\\" src=\\\"\\\" allow=\\\"clipboard-read; clipboard-write\\\" style=\\\"border:0;flex:1;width:100%;height:100%\\\"></iframe>\" +",
 	  "        \"</div>\" +",
-	  "        \"<div id=\\\"gp-debug\\\" style=\\\"position:fixed;right:8px;top:30px;color:#888;font:11px/1.2 system-ui;white-space:pre;z-index:2147483648;pointer-events:none;\\\"></div>\";",
-	  
+	  "        \"</div>\"",  
+	  // --- optional debug overlay ---
+	  //"        // <div id=\\\"gp-debug\\\" style=\\\"position:fixed;right:8px;top:30px;color:#888;font:11px/1.2 system-ui;white-space:pre;z-index:2147483648;pointer-events:none;\\\"></div>",
+	  "        ;",
       "      // Wire VNC src",
       "      var v=document.getElementById('vnc-frame'); ",
 	  "        if (v) {",
