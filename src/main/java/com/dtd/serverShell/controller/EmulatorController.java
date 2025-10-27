@@ -98,9 +98,11 @@ public class EmulatorController {
             Files.createDirectories(userPaths.savePath.toAbsolutePath() );
             log.info("[INIT DIR] Config path: " + userPaths.configPath.toAbsolutePath());
             log.info("[INIT DIR] save path: " + userPaths.savePath.toAbsolutePath() );
-            //decide ports
+            //decide ports and bind them nice and close
             int vncPort   = findFreePortInRange(33000, 33100);
             int audioPort = vncPort + 1;
+            int gamepadPort = audioPort + 1;
+            
             //audio setup
             Path pulseSocketPath = Paths.get(pulseDir);
             if (!Files.exists(pulseSocketPath)) {
@@ -117,17 +119,24 @@ public class EmulatorController {
                  //bind save & config paths
                  "-v", userPaths.configPath.toAbsolutePath().toAbsolutePath() + ":/config",
                  "-v", userPaths.savePath.toAbsolutePath()  + ":/save",
-                 "--pid=host",
-                 "-v", "/sys/kernel/debug:/sys/kernel/debug:ro",
                  //bind & mount ports
                  "--mount", "type=bind,source=" + pulseSocketPath + ",target=/tmp/pulseaudio.socket,readonly",
                  "-p", vncPort + ":52300",
                  "-p", audioPort + ":8081",
+                 //virtual controller
+                 "-p", gamepadPort + ":52400",
+                 // allow virtual pad                   
+                 "-v", "/dev/input:/dev/input", 
+                 "--device", "/dev/uinput", 
+                 // input event/js
+                 "--device-cgroup-rule", "c 13:* rwm", 
+                 "--device-cgroup-rule", "c 10:223 rwm",       
                  //GPU
                  "--device", "/dev/dri:/dev/dri",
                  "-v", "/run/udev:/run/udev:ro",
                  "--group-add", "993",
                  "--group-add", "44",
+                 "--group-add", "996", 
                  "-e", "LIBGL_ALWAYS_SOFTWARE=0",
                  "-e", "MESA_LOADER_DRIVER_OVERRIDE=radeonsi",   
                  //VT manager
@@ -179,6 +188,8 @@ public class EmulatorController {
             String serverIp = InetAddress.getLocalHost().getHostAddress();
             String vncUrl = "http://" + serverIp + ":" + vncPort + "/vnc.html?autoconnect=true&resize=scale&path=websockify";
             String audioUrl = "ws://" + serverIp + ":" + audioPort + "/";
+            String gamepadUrl = "ws://" + serverIp + ":" + gamepadPort + "/";
+            
             log.info("[CONTAINER WAIT] Waiting for container to be ready...");
             if (waitForContainerReady(vncUrl, 90)) {
                 log.info("[CONTAINER WAIT] Container ready, returning URLs to frontend");
@@ -189,6 +200,7 @@ public class EmulatorController {
             Map<String, String> response = new HashMap<>();
             response.put("vncUrl", vncUrl);
             response.put("audioUrl", audioUrl);
+            response.put("gamepadUrl", gamepadUrl);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return errorResponse("[INIT ERR] Failed to launch emulator: " + e.getMessage());
