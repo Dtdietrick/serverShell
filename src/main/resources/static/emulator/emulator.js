@@ -161,10 +161,13 @@ export function launchEmulator(rom, button) {
 	updateStatus("Contacting server…");
     const code = [
       "(function(){",
+	  
+	  "  var ACTIVE_IDX = -1;",
       "  function setText(id,t){var el=document.getElementById(id);if(el)el.textContent=t||'';}",
 
       "  // Exposed to parent: mounts VNC and starts gamepad client",
       "  window._emuMount = function(state){",
+	   	
       "    try{",
       "      document.title='Emulator';",
       "      document.documentElement.style.cssText='height:100%';",
@@ -196,17 +199,17 @@ export function launchEmulator(rom, button) {
 	  
 	  "      function seedActive(){",
 	  "        var pads=(navigator.getGamepads&&navigator.getGamepads())||[];",
-	  "        for (var i=0;i<pads.length;i++){ if(pads[i]){ ACTIVE_IDX=i; return; } }",
+	  "        for (var i=0;i<pads.length;i++){ if(pads[i]){ window.ACTIVE_IDX=i; return; } }",
 	  "      }",
 	  "      seedActive();",
 	  "      function dz(x){ return Math.abs(x)<DEADZONE ? 0 : x; }",
 	  
 	  "      // Make sure we light up when a controller arrives late",
 	  "      window.addEventListener('gamepadconnected', function(e){",
-	  "        try{ ACTIVE_IDX = (e && e.gamepad) ? e.gamepad.index : ACTIVE_IDX; setMsg('pad detected'); setDot(true); }catch(_){}",
+	  "        try{ window.ACTIVE_IDX = (e && e.gamepad) ? e.gamepad.index : window.ACTIVE_IDX; setMsg('pad detected'); setDot(true); }catch(_){}",
 	  "      });",
 	  "      window.addEventListener('gamepaddisconnected', function(e){",
-	  "        try{ if(e && e.gamepad && e.gamepad.index===ACTIVE_IDX){ ACTIVE_IDX = -1; setMsg('pad removed'); } }catch(_){}",
+	  "        try{ if(e && e.gamepad && e.gamepad.index===window.ACTIVE_IDX){ window.ACTIVE_IDX = -1; setMsg('pad removed'); } }catch(_){}",
 	  "      });",
 
 	  "      var msg=document.getElementById('gp-msg'), dbg=document.getElementById('gp-debug');",
@@ -230,8 +233,8 @@ export function launchEmulator(rom, button) {
 	  "      function buildState(){",
 	  "        var pads=(navigator.getGamepads&&navigator.getGamepads())||[];",
 	  "        var gp = null;",
-	  "        if (ACTIVE_IDX>=0 && pads[ACTIVE_IDX]) { gp = pads[ACTIVE_IDX]; }",
-	  "        else { for (var i=0;i<pads.length;i++){ if(pads[i]){ gp=pads[i]; ACTIVE_IDX=i; break; } } }",
+	  "        if (window.ACTIVE_IDX>=0 && pads[window.ACTIVE_IDX]) { gp = pads[window.ACTIVE_IDX]; }",
+	  "        else { for (var i=0;i<pads.length;i++){ if(pads[i]){ gp=pads[i]; window.ACTIVE_IDX=i; break; } } }",
 	  "        if(!gp) return null;",
 	  "        var axes=[], raw=[], i;",
 	  "        for(i=0;i<4 && i<gp.axes.length;i++) axes.push(dz(gp.axes[i]));",
@@ -251,7 +254,7 @@ export function launchEmulator(rom, button) {
 
       "      function sendState(){",
       "        var s=buildState(); if(!s) return;",
-      "        setDbg('idx:'+ACTIVE_IDX+'  map:'+(s.map||'n/a')+'  hat:'+s.hatx+','+s.haty+'  trig:'+s.trigL.toFixed(2)+','+s.trigR.toFixed(2)+'\\nbtn:'+s.buttons.join(''));",
+      "        setDbg('idx:'+window.ACTIVE_IDX+'  map:'+(s.map||'n/a')+'  hat:'+s.hatx+','+s.haty+'  trig:'+s.trigL.toFixed(2)+','+s.trigR.toFixed(2)+'\\nbtn:'+s.buttons.join(''));",
       "        if(!acked){ acked=true; setMsg('pad detected'); setDot(true); }",
       "        var now=s.t, changed=!same(s,last), due=(now-lastSendTs)>=HEARTBEAT_MS;",
 	  "        if (!acked) { /* no-op */ } else {",
