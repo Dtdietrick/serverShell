@@ -108,6 +108,23 @@ document.addEventListener("explorer:navigated", (e) => {
   renderGroupLabel();
 });
 
+const PIXELART_DIR = "Movies/BGs";   
+
+function isUnderPixelArt(fullRel) {
+  const ex = (PIXELART_DIR || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+|\/+$/g, "")
+    .toLowerCase();
+
+  const p = String(fullRel || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .toLowerCase();
+
+  if (!ex) return false;
+  return p === ex || p.startsWith(ex + "/");
+}
+
 function normalizeRelForClient(p) {
   // Collapse slashes and strip any leading slash; keep media-root-relative
   return String(p || "")
@@ -208,7 +225,6 @@ function makeStarButton(relPath, { isFav = false } = {}) {
   return btn;
 }
 
-const PIXELART_DIR = "Movies/BGs";   
 let _ambientList = null;            
 let _ambientHls  = null;       
 
@@ -739,9 +755,14 @@ function renderListView({ folders, files, prefix, isGrouped = false, groupLabel 
 
   const query = getSearchQuery();
 
-  const foldersOnly = filterFoldersByQuery(folders, query);
-  const filesForView = filterFilesByQuery(files, query);
+  let foldersOnly = filterFoldersByQuery(folders, query);
+  let filesForView = filterFilesByQuery(files, query);
 
+  //remove pixelart dir
+  const pref = String(prefix || "");
+  foldersOnly = foldersOnly.filter(name => !isUnderPixelArt((pref + name).replace(/\/{2,}/g, "/")));
+  filesForView = filesForView.filter(name => !isUnderPixelArt((pref + name).replace(/\/{2,}/g, "/")));
+  
   if (query && foldersOnly.length === 0 && filesForView.length === 0) {
     const wrap = document.createElement("div");
     wrap.id = "media-scroll";

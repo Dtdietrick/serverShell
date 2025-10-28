@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.dtd.serverShell.model.AppUser;
@@ -16,6 +17,9 @@ public class UserService {
 
     private final AppUserRepository userRepository;
 
+    @Value("${pixelart.dir}")
+    private String pixelartDir;
+    
     public UserService(AppUserRepository userRepository) {
         this.userRepository = userRepository;
     }
@@ -43,13 +47,11 @@ public class UserService {
         if (s.endsWith("/"))          s = s.substring(0, s.length() - 1);
         return s;
     }
-
-    private static final String PIXELART_DIR = "Movies/BGs";
     
     public void recordView(String username, String filenameOrFolder) {
         final String key = normalizeRecentPath(filenameOrFolder);
 
-        if (key != null && key.replace('\\', '/').startsWith(PIXELART_DIR + "/")) {
+        if (key != null && key.replace('\\', '/').startsWith(pixelartDir + "/")) {
             return;
         }
 

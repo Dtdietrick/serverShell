@@ -6,7 +6,6 @@
  * 4. ws url for <audio> playWsWebmOpus(wsUrl) 
 */
 
-
 //  export stays the same for callers
 let __emuWin = null;         
 let __emuSession = 0;       
@@ -216,7 +215,7 @@ export function launchEmulator(rom, button) {
 	  "      function setMsg(t){ if(msg) msg.textContent=t||''; }",
 	  "      function setDot(on){ var d=document.getElementById('gp-status'); if(d) d.style.background = on ? '#4CAF50' : '#666'; }",
 	  "      function setDbg(t){ try{ if(dbg){ dbg.textContent = t||''; } }catch(e){ console.error('[emulator] dbg write failed', e); } }",
-	  "      if(!dbg){ console.warn('[emulator] gp-debug not found yet'); }",
+	 // "      if(!dbg){ console.warn('[emulator] gp-debug not found yet'); }",
 	  
 	  "      function same(a,b){",
 	  "        if(!b) return false;",
