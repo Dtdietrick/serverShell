@@ -44,8 +44,14 @@ public class UserService {
         return s;
     }
 
+    private static final String PIXELART_DIR = "Movies/BGs";
+    
     public void recordView(String username, String filenameOrFolder) {
         final String key = normalizeRecentPath(filenameOrFolder);
+
+        if (key != null && key.replace('\\', '/').startsWith(PIXELART_DIR + "/")) {
+            return;
+        }
 
         Optional<AppUser> userOpt = userRepository.findByUsername(username);
         userOpt.ifPresent(user -> {

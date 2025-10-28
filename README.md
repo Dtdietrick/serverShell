@@ -146,7 +146,7 @@ WantedBy=multi-user.target
 - [✅] JumpTo media back button fix (v1.1-LTS)
 - [✅] Full N64 Emulator functionality (v1.1-LTS)
 - [✅] Bluetooth Bridge for N64 Emulator (v1.1-LTS)
-- [ ] Basic Visualizer for Music Only Stream (Will add to v1.1-LTS)
+- [✅]] Basic Visualizer for Music Only Stream (v1.1-LTS)
 
 Maybe List
 - [ ] ESLint/Checkstyle

@@ -24,3 +24,11 @@
   padding: 0;        
   box-sizing: border-box;
 }
+
+/* anchor for the ambient */
+#player-container { position: relative; }           
+#media-player { position: relative; z-index: 1; } 
+#player-stage { position: relative; width: 100%; max-height: 70vh; }    
+#player-stage > #media-player { position: relative; z-index: 1; }        
+#player-stage > #ambient-bg  { position: absolute; inset: 0;
+  object-fit: cover; z-index: 0; pointer-events: none; opacity: .9; }   

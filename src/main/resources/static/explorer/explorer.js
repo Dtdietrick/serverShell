@@ -49,11 +49,40 @@ function readLocalFavorites(category) {
     return new Set();
   }
 }
+
+async function resolveVodM3U8(relPath) {
+  const clean = String(relPath).replace(/^\/+/, "");
+  const res = await fetch("/media/vod", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: clean })
+  });
+  if (!res.ok) throw new Error(`VOD resolve failed: ${res.status}`);
+  const { m3u8 } = await res.json();
+  return m3u8; // e.g. /media/vod/fs/Movies/BGs/SomeLoop/index.m3u8
+}
+
+function waitForMediaPlayer(timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    const el = document.getElementById('media-player');
+    if (el) return resolve(el);
+
+    const to = setTimeout(() => { obs.disconnect(); resolve(null); }, timeoutMs);
+    const obs = new MutationObserver(() => {
+      const n = document.getElementById('media-player');
+      if (n) { clearTimeout(to); obs.disconnect(); resolve(n); }
+    });
+    // observe whole doc; player can appear in viewer or in popup
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+  });
+}
+
 function writeLocalFavorites(category, set) {
   try {
     localStorage.setItem(LS_FAV_KEY(category), JSON.stringify([...set]));
   } catch {}
 }
+
 setPlayMediaCallback((path, inPopup = true, fromPlaylist = true) => {
   return window.AppPlayer?.playMedia(path, inPopup, fromPlaylist);
 });
@@ -177,6 +206,117 @@ function makeStarButton(relPath, { isFav = false } = {}) {
   };
 
   return btn;
+}
+
+const PIXELART_DIR = "Movies/BGs";   
+let _ambientList = null;            
+let _ambientHls  = null;       
+
+async function fetchAmbientList() {
+  if (_ambientList) return _ambientList;
+  try {
+    const res = await fetch(`/media/list?path=${encodeURIComponent(PIXELART_DIR)}`);
+    if (!res.ok) throw new Error(`ambient list HTTP ${res.status}`);
+    const items = await res.json();
+    // Accept either folders OR index files; normalize to "…/index.m3u8" paths.
+    _ambientList = (items || []).map(p => {
+      p = String(p).replace(/^\/+/, "");
+      return p.toLowerCase().endsWith(".m3u8") ? p : `${p.replace(/\/+$/,"")}/index.m3u8`;
+    });
+  } catch (e) {
+    console.warn("[ambient] no list:", e);
+    _ambientList = [];
+  }
+  return _ambientList;
+}
+
+function ensurePlayerStage() {                                               
+  const mediaEl = document.getElementById("media-player");                  
+  if (!mediaEl) return null;                                                 
+  let stage = mediaEl.parentElement;                                        
+  if (stage && stage.id === "player-stage") return stage;                    
+
+  stage = document.createElement("div");                                     
+  stage.id = "player-stage";                                                
+  Object.assign(stage.style, { position: "relative", width: "100%",         
+    maxHeight: "70vh" });                                                   
+  mediaEl.insertAdjacentElement("beforebegin", stage);                     
+  stage.appendChild(mediaEl);                                              
+  if (!mediaEl.style.position) mediaEl.style.position = "relative";         
+  if (!mediaEl.style.zIndex)    mediaEl.style.zIndex = "1";                 
+  return stage;                                                            
+}
+
+
+// ambient music video player functions
+function stopAmbient() {                                                    
+  try { if (_ambientHls) { _ambientHls.destroy(); _ambientHls = null; } } catch {} 
+  const el = document.getElementById("ambient-bg");                         
+  if (el && el.parentNode) el.parentNode.removeChild(el);                    
+  const container = document.getElementById("player-container");            
+  if (container) container.classList.remove("music-ambient-on");             
+}
+
+let _ambientBooting = false;
+
+async function startAmbientForMusic() {
+  if (_ambientBooting) return;
+  _ambientBooting = true;
+
+  try {
+    const list = await fetchAmbientList();
+    if (!list || list.length === 0) { stopAmbient(); return; }
+
+    //  Wait for player element (viewer or popup)
+    const mediaEl = await waitForMediaPlayer(3000);
+    if (!mediaEl) { 
+      console.warn("[ambient] timed out waiting for #media-player"); 
+      return; 
+    }
+
+    // Ensure wrapper on the actual player (viewer or popup)
+    const stage = ensurePlayerStage();  
+    if (!stage) { console.warn("[ambient] no stage after wait"); return; }
+
+    stopAmbient();
+
+    // Build ambient video behind the real player
+    const vid = document.createElement("video");
+    vid.id = "ambient-bg";
+    vid.muted = true; vid.autoplay = true; vid.loop = true;
+    vid.playsInline = true; vid.setAttribute("webkit-playsinline", "true");
+    Object.assign(vid.style, {
+      position: "absolute", inset: "0", width: "100%", height: "100%",
+      objectFit: "cover", zIndex: "0", pointerEvents: "none", opacity: "0.9", flex: "none"
+    });
+    stage.prepend(vid);
+
+    // logging
+    vid.addEventListener("loadeddata", () => console.log("[ambient] loadeddata"));
+    vid.addEventListener("playing",    () => console.log("[ambient] playing"));
+    vid.addEventListener("error",      () => console.warn("[ambient] <video> error", vid.error));
+
+    const pick = list[Math.floor(Math.random() * list.length)];
+    const m3u8Url = await resolveVodM3U8(pick);
+    console.log("[ambient] using", m3u8Url);
+
+    if (window.Hls && window.Hls.isSupported()) {
+      _ambientHls = new window.Hls({ autoStartLoad: true });
+      _ambientHls.on(window.Hls.Events.ERROR, (_, data) => {
+        console.warn("[ambient][hls] error", data);
+      });
+      _ambientHls.loadSource(m3u8Url);
+      _ambientHls.attachMedia(vid);
+      _ambientHls.on(window.Hls.Events.MANIFEST_PARSED, () => vid.play().catch(()=>{}));
+    } else {
+      vid.src = m3u8Url;
+      vid.play().catch(()=>{});
+    }
+
+    document.getElementById("player-container")?.classList.add("music-ambient-on");
+  } finally {
+    _ambientBooting = false;
+  }
 }
 
 function initGroupingToggle() {
@@ -379,13 +519,22 @@ async function computeNextIndexPath(currentFullPath) {
 }
 
 // helper used for all playback starts
-async function playAndStage(path) {                      
-  const display = displayNameFor(path);
-  const viewerHeader = document.querySelector('#viewer-player h3');
-  if (viewerHeader) viewerHeader.textContent = display;
-  setCurrentPath(path);
-  await window.AppPlayer.playMedia(path);
-  stageAutoplayFor(path);                                
+export async function playAndStage(path) {                          
+  const rel = normalizeRelForClient(path);                   
+
+  const display = displayNameFor(rel);                        
+  const viewerHeader = document.querySelector('#viewer-player h3'); 
+  if (viewerHeader) viewerHeader.textContent = display;     
+  setCurrentPath(rel);                                       
+
+
+  await window.AppPlayer.playMedia(rel);                      
+
+ 
+  const isMusic = (categoryOf(rel) === "Music");             
+  if (isMusic) startAmbientForMusic(); else stopAmbient();   
+
+  stageAutoplayFor(rel);                                    
 }
 
 //auto play check
@@ -444,6 +593,18 @@ function showNextPrompt(nextPath) {
   container.appendChild(prompt);
   console.log("[autoplay] prompt injected for:", nextPath);
 }
+
+window.addEventListener("playlist:played", (e) => {
+  const raw = (e?.detail?.path ?? "");
+  const rel = normalizeRelForClient(raw); 
+
+  const isMusic = (categoryOf(rel) === "Music");
+  if (isMusic) {
+    startAmbientForMusic();
+  } else {
+    stopAmbient();
+  }
+});
 
 //autoplay path; set AppPlayer.onEnded once per click
 export function stageAutoplayFor(libraryPath) {

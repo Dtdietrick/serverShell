@@ -1,5 +1,5 @@
 // File: mediaDashboard.js
-import { firstRender, renderFolder, stageAutoplayFor, renderGroupLabel } from '/explorer/explorer.js';
+import { firstRender, renderFolder, stageAutoplayFor, renderGroupLabel, playAndStage } from '/explorer/explorer.js';
 import { setLastClickedGroupLabel } from '/explorer/path.js';
 
 function getViewerMediaTitleEl() {
@@ -48,12 +48,5 @@ export async function handleJumpParam() {
   renderGroupLabel();
   
   // done walking; trigger autoplay + playback
-  stageAutoplayFor(jumpTo);
-  const viewerH3 = getViewerMediaTitleEl();
-  
-  if (viewerH3) {
-    viewerH3.textContent = titleFromPath(jumpTo);
-  }
-  
-  window.AppPlayer?.playMedia(jumpTo);
+  await playAndStage(jumpTo);  
 }

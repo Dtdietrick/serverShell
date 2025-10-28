@@ -120,13 +120,24 @@ function renderLiForItem(nItem, idx) {
 
 function playSelected(n) {
   // record path
-  nowPlayingPath = n.path;                       
-  setActiveIndexByPath(nowPlayingPath);        
-  //label from title
-  setNowPlayingLabelText(n.title || n.path);     
+  nowPlayingPath = n.path;
+  setActiveIndexByPath(nowPlayingPath);
+  // label from title
+  setNowPlayingLabelText(n.title || n.path);
+
+  // (unchanged) actually start playback in the popup
   playMedia(n.path, true, true);
+
   // in case UI jitter, re-check on the next tick
-  queueMicrotask?.(() => setActiveIndexByPath(nowPlayingPath));
+  queueMicrotask?.(() => {
+    setActiveIndexByPath(nowPlayingPath);
+    // NEW: tell explorer that a playlist item has begun playing
+    try {
+      window.dispatchEvent(new CustomEvent("playlist:played", {
+        detail: { path: nowPlayingPath }
+      }));
+    } catch {}
+  });
 }
 
 function setActiveIndex(nextIdx) {
