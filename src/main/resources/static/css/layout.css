@@ -1,3 +1,5 @@
+/* FILE: layout.css */
+
 #main-layout {
   display: flex;
   align-items: flex-start;
@@ -19,8 +21,6 @@
   top: 2rem;
   align-self: flex-start;
 }
-
-/* FILE: layout.css */
 
 /* Layout positioning for pinned launcher */
 #pinned-launchers {

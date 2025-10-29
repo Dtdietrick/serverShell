@@ -83,8 +83,39 @@
   opacity: .9;
 }
 
-/* While ambient is on, hide that floating detach button UI completely */
-body.ambient-on #detach-button-host,
-body.ambient-on #detached-button-host {
+#player-header { margin-bottom: 0.5rem; }
+.player-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 4px; 
+}
+
+/* button now lives in normal flow; no absolute positioning needed */
+.player-skip-end-btn {
+  margin-left: 6px;
+  padding: 2px 6px;      
+  min-width: 24px;      
+  height: 22px;          
+  line-height: 1;         
+  border-radius: 4px;
+  background: var(--surface-2, rgba(20,30,45,.6));
+  color: var(--text-strong, #eaf2ff);
+  border: 1px solid rgba(120,200,255,.4);
+  font: 600 11px/1 system-ui, sans-serif;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,.25);
+  transition: background .15s ease, transform .12s ease;
+}
+
+.player-skip-end-btn:hover   { background: rgba(40,70,110,.85); transform: translateY(-1px); }
+.player-skip-end-btn:disabled{ opacity:.5; cursor: default; transform:none; }
+
+/* keep this: if your ambient stage goes fullscreen, that view shows only the stage */
+#player-stage:fullscreen .player-skip-end-btn { display: none !important; }
+
+/* Opera detached buttons annoy me */
+#detach-button-host,
+#detached-button-host {
   display: none !important;
 }

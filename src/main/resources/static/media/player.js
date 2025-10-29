@@ -27,6 +27,35 @@
     state.sourcePath = null; // track last requested path
   }
 
+  function addSkipToEndButton(video) {
+    // remove any prior instance
+    document.querySelectorAll('.player-skip-end-btn').forEach(b => b.remove());
+
+    const titlebar = document.querySelector('#player-header .player-titlebar');
+    if (!titlebar) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'player-skip-end-btn';
+    btn.type = 'button';
+    btn.title = 'Skip to end';
+    btn.setAttribute('aria-label', 'Skip to end');
+    btn.textContent = 'Jump To End »|';
+
+    // enable once metadata is ready
+    btn.disabled = true;
+    const enable = () => { btn.disabled = false; };
+    if (Number.isFinite(video.duration)) enable();
+    else video.addEventListener('loadedmetadata', enable, { once: true });
+
+    // jump to ~EOF so your natural 'ended' handlers run
+    btn.addEventListener('click', () => {
+      const d = Number(video.duration);
+      if (Number.isFinite(d) && d > 0.6) video.currentTime = Math.max(0, d - 0.5);
+    });
+
+    titlebar.appendChild(btn);
+  }
+
   async function loadSubtitles(video, sourcePath) {
     try {
       // --- keep your logic, but make dir detection a bit safer ---
@@ -245,6 +274,8 @@
         return;
       }
 
+	  addSkipToEndButton(video);
+	  
       //notify explorer on natural end
 	  video.addEventListener('ended', () => {
 	    try {
