@@ -263,13 +263,21 @@ function ensurePlayerStage() {
 }
 
 // ambient music video player functions
-function stopAmbient() {                                                    
-  try { if (_ambientHls) { _ambientHls.destroy(); _ambientHls = null; } } catch {} 
-  const el = document.getElementById("ambient-bg");                         
-  if (el && el.parentNode) el.parentNode.removeChild(el);                    
-  const container = document.getElementById("player-container");            
-  if (container) container.classList.remove("music-ambient-on");   
-  document.body.classList.remove("ambient-on");          
+function stopAmbient() {
+  try { if (_ambientHls) { _ambientHls.destroy(); _ambientHls = null; } } catch {}
+  const el = document.getElementById("ambient-bg");
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+
+  const stage = document.getElementById("player-stage");
+  if (stage) { stage.style.minHeight = ""; stage.style.height = ""; }
+
+  const player = document.getElementById("media-player");
+  if (player) { player.style.height = ""; player.style.maxHeight = ""; }
+
+  const container = document.getElementById("player-container");
+  if (container) container.classList.remove("music-ambient-on");
+
+  document.body.classList.remove("ambient-on");
 }
 
 let _ambientBooting = false;
@@ -282,44 +290,74 @@ async function startAmbientForMusic() {
     const list = await fetchAmbientList();
     if (!list || list.length === 0) { stopAmbient(); return; }
 
-    //  Wait for player element (viewer or popup)
     const mediaEl = await waitForMediaPlayer(3000);
-    if (!mediaEl) { 
-      console.warn("[ambient] timed out waiting for #media-player"); 
-      return; 
-    }
+    if (!mediaEl) { console.warn("[ambient] timed out waiting for #media-player"); return; }
 
-    // Ensure wrapper on the actual player (viewer or popup)
-    const stage = ensurePlayerStage();  
+    const stage = ensurePlayerStage();
     if (!stage) { console.warn("[ambient] no stage after wait"); return; }
 
-    stopAmbient();
+    stopAmbient(); // ensure a clean slate
 
-    // Build ambient video behind the real player
     const vid = document.createElement("video");
     vid.id = "ambient-bg";
     vid.muted = true; vid.autoplay = true; vid.loop = true;
     vid.playsInline = true; vid.setAttribute("webkit-playsinline", "true");
     Object.assign(vid.style, {
-      position: "absolute", inset: "0", width: "100%", height: "100%",
-      objectFit: "cover", zIndex: "0", pointerEvents: "none", opacity: "0.9", flex: "none"
+      position: "absolute", inset: "0",
+      width: "100%", height: "100%",
+      objectFit: "cover", zIndex: "0",
+      pointerEvents: "none", opacity: "0.9", flex: "none"
     });
     stage.prepend(vid);
+
+    // give ambient room
+	let _resizeBound = null;
+	const player = mediaEl; // #media-player
+	const sizeStage = () => {
+	  try {
+	    const w = vid.videoWidth  || 1920;
+	    const h = vid.videoHeight || 1080;
+	    const ratio = h / w;
+
+	    const stageWidth = stage.clientWidth || player.clientWidth || 800;
+	    const desiredH = Math.round(stageWidth * ratio);
+
+	    const maxH = Math.round(window.innerHeight * 0.60); 
+	    const minH = 240;                                  
+	    const finalH = Math.max(minH, Math.min(desiredH, maxH));
+
+	    // apply to stage
+	    stage.style.minHeight = finalH + "px";
+	    stage.style.height    = finalH + "px";
+        // mirror real player 
+        player.style.height    = finalH + "px";
+        player.style.maxHeight = finalH + "px";
+        player.style.width     = "100%";   
+        player.style.display   = "block";  
+        player.style.position  = player.style.position || "relative";
+        player.style.zIndex    = player.style.zIndex || "1";
+      } catch {}
+    };
+
+    vid.addEventListener("loadedmetadata", sizeStage);
+    sizeStage();
+    _resizeBound = () => sizeStage();
+    window.addEventListener("resize", _resizeBound);
+    vid.addEventListener("error", () => {
+      try { window.removeEventListener("resize", _resizeBound); } catch {}
+    });
 
     // logging
     vid.addEventListener("loadeddata", () => console.log("[ambient] loadeddata"));
     vid.addEventListener("playing",    () => console.log("[ambient] playing"));
     vid.addEventListener("error",      () => console.warn("[ambient] <video> error", vid.error));
-
     const pick = list[Math.floor(Math.random() * list.length)];
     const m3u8Url = await resolveVodM3U8(pick);
     console.log("[ambient] using", m3u8Url);
 
     if (window.Hls && window.Hls.isSupported()) {
       _ambientHls = new window.Hls({ autoStartLoad: true });
-      _ambientHls.on(window.Hls.Events.ERROR, (_, data) => {
-        console.warn("[ambient][hls] error", data);
-      });
+      _ambientHls.on(window.Hls.Events.ERROR, (_, data) => console.warn("[ambient][hls] error", data));
       _ambientHls.loadSource(m3u8Url);
       _ambientHls.attachMedia(vid);
       _ambientHls.on(window.Hls.Events.MANIFEST_PARSED, () => vid.play().catch(()=>{}));
@@ -328,8 +366,8 @@ async function startAmbientForMusic() {
       vid.play().catch(()=>{});
     }
 
-	document.body.classList.add("ambient-on");
-	addAmbientFullscreenButton(stage, vid);
+    document.body.classList.add("ambient-on");
+    addAmbientFullscreenButton(stage, vid);
     document.getElementById("player-container")?.classList.add("music-ambient-on");
   } finally {
     _ambientBooting = false;
