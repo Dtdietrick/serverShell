@@ -21,6 +21,48 @@ let savedViewerHeading = null;
 //remember original player mount to move it into popup
 let originalPlayerParent = null;
 
+//autoplay
+let __popupAutoplayTimer = null;
+const AUTOPLAY_DELAY_KEY = "explorer.autoplayDelayMs";
+function readAutoplayDelayMsFromExplorer() {
+  const raw = localStorage.getItem(AUTOPLAY_DELAY_KEY);
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 5000; // default 5s (same as explorer)
+}
+
+// Helper to schedule headless autoplay in popup
+function schedulePopupAutoplay() {
+  // only when the player is mounted in popup
+  const playerContainer = document.getElementById("player-container");
+  const inPopup = !!playerContainer?.classList.contains("in-popup");
+  if (!inPopup) return;
+
+  const delay = readAutoplayDelayMsFromExplorer();
+  // If user set Auto: Off, do nothing
+  if (delay <= 0) return;
+
+  // clear any prior timer then schedule
+  if (__popupAutoplayTimer) { clearTimeout(__popupAutoplayTimer); __popupAutoplayTimer = null; }
+  __popupAutoplayTimer = setTimeout(async () => {
+    __popupAutoplayTimer = null;
+    try {
+      await nextInPlaylist();
+    } catch (e) {
+      console.warn("[popup][autoplay] next failed:", e);
+    }
+  }, delay);
+
+  // Any user interaction in the popup cancels the pending autoplay
+  const popupRoot = document.getElementById("playlist-popup");
+  const cancel = () => {
+    if (__popupAutoplayTimer) { clearTimeout(__popupAutoplayTimer); __popupAutoplayTimer = null; }
+    popupRoot?.removeEventListener("click", cancel);
+    document.removeEventListener("keydown", cancel);
+  };
+  popupRoot?.addEventListener("click", cancel, { once: true });
+  document.addEventListener("keydown", cancel, { once: true });
+}
+
 function getViewerMediaTitleEl() {
   return document.getElementById('media-title');
 }
@@ -57,7 +99,7 @@ function moveLabelToPopup() {
 
   playlistMediaLabel.classList.add('in-popup');
 
-  // Optional: restore the viewer title to its original text when the popup opens
+  // restore the viewer title to its original text when the popup opens
   const viewerH3 = getViewerMediaTitleEl();
   if (viewerH3 && viewerH3.dataset.origText) {
     viewerH3.textContent = viewerH3.dataset.origText;
@@ -125,13 +167,30 @@ function playSelected(n) {
   // label from title
   setNowPlayingLabelText(n.title || n.path);
 
-  // (unchanged) actually start playback in the popup
+  //start playback in the popup
   playMedia(n.path, true, true);
 
   // in case UI jitter, re-check on the next tick
   queueMicrotask?.(() => {
     setActiveIndexByPath(nowPlayingPath);
-    // NEW: tell explorer that a playlist item has begun playing
+
+    //when the current media ends, schedule autoplay using user's setting
+	try {
+	  const mediaEl = document.getElementById("media-player");
+	  if (mediaEl) {
+	    // remove prior hook if any to avoid duplicates after next/prev
+	    if (mediaEl.__popupOnEnded) {
+	      mediaEl.removeEventListener("ended", mediaEl.__popupOnEnded);
+	    }
+	    mediaEl.__popupOnEnded = () => {
+	      try { window.AppPlayer?.onEnded?.(); } catch (e) { console.warn("[popup] onEnded call failed:", e); }
+	    };
+	    mediaEl.addEventListener("ended", mediaEl.__popupOnEnded);
+	  }
+	} catch {}
+
+
+    // Tell explorer that a playlist item began
     try {
       window.dispatchEvent(new CustomEvent("playlist:played", {
         detail: { path: nowPlayingPath }
@@ -275,6 +334,9 @@ function ensurePopupHasPlayer() {
     popupPlayer.appendChild(player);
     player.classList.add("in-popup");
   }
+  
+  try { if (window.stageAutoplayFor) window.stageAutoplayFor("POPUP"); } catch {}
+  
   moveLabelToPopup();
 }
 
@@ -308,6 +370,7 @@ function pausePlayback() {
  * Close and reset the playlist popup.
  */
 export function closePlaylist() {
+  if (__popupAutoplayTimer) { clearTimeout(__popupAutoplayTimer); __popupAutoplayTimer = null; }
   pausePlayback();
 
   playlistPopup.classList.remove('open');
@@ -370,3 +433,9 @@ export function initPlaylist() {
     }
   });
 }
+
+window.MediaPlaylist = {
+  playNext:  nextInPlaylist,
+  playPrev:  prevInPlaylist,
+  shuffle:   shufflePlaylist
+};

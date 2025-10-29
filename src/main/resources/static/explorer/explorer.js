@@ -673,90 +673,110 @@ export async function playAndStage(path) {
 }
 
 //auto play check
+let __autoplayTimer = null;
+
 function showNextPrompt(nextPath) {
   const container = document.getElementById('player-container');
   if (!container) return;
+
+  // NEW: detect popup; in popup we do headless autoplay (no UI bubble)
+  const inPopup = !!container.closest('.in-popup');
+  const currentDelay = readAutoplayDelayMs();
+
+  // Always clear any prior timers/bubbles first
+  try { clearTimeout(__autoplayTimer); __autoplayTimer = null; } catch {}
+  try { document.getElementById('next-prompt')?.remove(); } catch {}
+
+  if (inPopup) {
+    // Respect user preference in popup but DO NOT show any prompt UI
+    if (currentDelay > 0) {
+      const fire = async () => {
+        try {
+          // Prefer the popup playlist’s own "next" control if present
+          if (window.MediaPlaylist && typeof window.MediaPlaylist.playNext === 'function') {
+            await window.MediaPlaylist.playNext();
+          } else if (window.AppPlayer && typeof window.AppPlayer.next === 'function') {
+            await window.AppPlayer.next();
+          } else {
+            // last-resort: fall back to original stage logic
+            await playAndStage(nextPath);
+          }
+        } catch (e) {
+          console.warn('[autoplay][popup] next failed:', e);
+        } finally {
+          __autoplayTimer = null;
+        }
+      };
+
+      // schedule headless autoplay
+      __autoplayTimer = setTimeout(fire, currentDelay);
+
+      // cancel if user interacts in the popup (click/keypress)
+      const popupRoot = container.closest('.in-popup');
+      const cancel = () => { try { clearTimeout(__autoplayTimer); } catch {} __autoplayTimer = null; 
+        popupRoot?.removeEventListener('click', cancel);
+        document.removeEventListener('keydown', cancel);
+      };
+      popupRoot?.addEventListener('click', cancel, { once: true });
+      document.addEventListener('keydown', cancel, { once: true });
+
+      console.log('[autoplay][popup] scheduled in', currentDelay, 'ms');
+    }
+    return; // <-- no UI injected in popup mode
+  }
+
+  // ------- normal (non-popup) path: keep your existing bubble UI ---------
 
   if (getComputedStyle(container).position === 'static') {
     container.style.position = 'relative';
   }
 
-  const existing = document.getElementById('next-prompt');
-  if (existing) existing.remove();
-
   const display = displayNameFor(nextPath);
-  const currentDelay = readAutoplayDelayMs();
 
   const prompt = document.createElement('div');
   prompt.id = 'next-prompt';
   prompt.setAttribute('role', 'dialog');
-  prompt.style.position = 'absolute';
-  prompt.style.top = '12px';
-  prompt.style.right = '12px';
-  prompt.style.padding = '10px 12px';
-  prompt.style.borderRadius = '12px';
-  prompt.style.background = 'rgba(0,0,0,0.72)';
-  prompt.style.color = '#fff';
-  prompt.style.backdropFilter = 'blur(2px)';
-  prompt.style.boxShadow = '0 4px 14px rgba(0,0,0,.35)';
-  prompt.style.zIndex = '9999'; // above <video>
-  prompt.style.maxWidth = '60%';
-  prompt.style.pointerEvents = 'auto';
+  Object.assign(prompt.style, {
+    position: 'absolute', top: '12px', right: '12px',
+    padding: '10px 12px', borderRadius: '12px',
+    background: 'rgba(0,0,0,0.72)', color: '#fff',
+    backdropFilter: 'blur(2px)', boxShadow: '0 4px 14px rgba(0,0,0,.35)',
+    zIndex: '9999', maxWidth: '60%', pointerEvents: 'auto'
+  });
 
-  // countdown chip lives next to the toggle; we update its text while counting
   const countdownId = `next-countdown-${Date.now()}`;
   prompt.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="opacity:.9">Up next:</span>
       <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45ch">${display}</strong>
-
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
         <span id="${countdownId}" style="opacity:.8"></span>
         <button id="next-auto-toggle" title="Toggle autoplay delay" style="cursor:pointer;border:0;border-radius:8px;padding:4px 8px;background:#222;color:#ddd">
           ${formatDelayLabel(currentDelay)}
         </button>
-        <button id="next-play-btn" style="cursor:pointer;border:0;border-radius:10px;padding:6px 10px">
-          ▶ Play next
-        </button>
+        <button id="next-play-btn" style="cursor:pointer;border:0;border-radius:10px;padding:6px 10px">▶ Play next</button>
         <button id="next-dismiss-btn" title="Dismiss" style="cursor:pointer;border:0;background:transparent;color:#fff;opacity:.75">✕</button>
       </div>
     </div>
   `;
 
-  // ----- controls
   const elDismiss   = prompt.querySelector('#next-dismiss-btn');
   const elPlay      = prompt.querySelector('#next-play-btn');
   const elToggle    = prompt.querySelector('#next-auto-toggle');
   const elCountdown = prompt.querySelector(`#${countdownId}`);
 
-  let timer = null;
-  let ticker = null;
-  let deadlineTs = 0;
+  let timer = null, ticker = null, deadlineTs = 0;
 
-  const clearTimers = () => {
-    if (timer)  { clearTimeout(timer);  timer = null; }
-    if (ticker) { clearInterval(ticker); ticker = null; }
-  };
+  const clearTimers = () => { if (timer)  { clearTimeout(timer);  timer = null; }
+                              if (ticker) { clearInterval(ticker); ticker = null; } };
+  const removePrompt = () => { clearTimers(); try { prompt.remove(); } catch {} };
 
-  const removePrompt = () => {
-    clearTimers();
-    try { prompt.remove(); } catch {}
-  };
-
-  elDismiss?.addEventListener('click', () => {
-    removePrompt();
-  });
-
+  elDismiss?.addEventListener('click', removePrompt);
   elPlay?.addEventListener('click', async () => {
     clearTimers();
-    try {
-      await playAndStage(nextPath);
-    } finally {
-      removePrompt();
-    }
+    try { await playAndStage(nextPath); } finally { removePrompt(); }
   });
 
-  // cycle delay options on each click: Off -> 5s -> 10s -> Off ...
   elToggle?.addEventListener('click', () => {
     const cur = readAutoplayDelayMs();
     const idx = AUTOPLAY_DELAY_OPTIONS.indexOf(cur);
@@ -764,8 +784,6 @@ function showNextPrompt(nextPath) {
     const nextVal = AUTOPLAY_DELAY_OPTIONS[nextIdx];
     writeAutoplayDelayMs(nextVal);
     elToggle.textContent = formatDelayLabel(nextVal);
-
-    // restart countdown with new value
     clearTimers();
     startCountdown(nextVal);
   });
@@ -775,31 +793,21 @@ function showNextPrompt(nextPath) {
     if (ms <= 0) { elCountdown.textContent = formatDelayLabel(0); return; }
 
     deadlineTs = Date.now() + ms;
-
-    // UI ticker every 250ms
     const update = () => {
       const remain = Math.max(0, deadlineTs - Date.now());
-      const s = Math.ceil(remain / 1000);
-      elCountdown.textContent = `Autoplay in ${s}s…`;
+      elCountdown.textContent = `Autoplay in ${Math.ceil(remain/1000)}s…`;
     };
     update();
     ticker = setInterval(update, 250);
 
-    // fire actual auto-play
     timer = setTimeout(async () => {
       clearTimers();
-      try {
-        await playAndStage(nextPath);
-      } finally {
-        removePrompt();
-      }
+      try { await playAndStage(nextPath); } finally { removePrompt(); }
     }, ms);
   }
 
   container.appendChild(prompt);
-  console.log("[autoplay] prompt injected for:", nextPath);
-
-  // kick off with whatever is currently configured
+  console.log('[autoplay] prompt injected for:', nextPath);
   startCountdown(currentDelay);
 }
 
@@ -821,14 +829,47 @@ export function stageAutoplayFor(libraryPath) {
 
   window.AppPlayer.onEnded = async () => {
     try {
-      // Prefer the last path we just set (via playAndStage); fall back to provided argument
-      const basePath = libraryPath;
-      console.log("[autoplay] ended detected for:", basePath);
-      const nextPath = await computeNextIndexPath(basePath);
+      const container = document.getElementById('player-container');
+      const inPopup   = !!container?.closest('.in-popup');
+      const delayMs   = readAutoplayDelayMs();
+
+      // Popup: use playlist’s “next”, respect the user’s autoplay delay, no UI
+      if (inPopup) {
+        // clear any previous pending timer
+        if (__autoplayTimer) { clearTimeout(__autoplayTimer); __autoplayTimer = null; }
+        if (delayMs <= 0) return;
+
+        __autoplayTimer = setTimeout(async () => {
+          __autoplayTimer = null;
+          try {
+            if (window.MediaPlaylist?.playNext) {
+              await window.MediaPlaylist.playNext();
+            } else if (window.AppPlayer?.next) {
+              await window.AppPlayer.next();
+            }
+          } catch (e) {
+            console.warn('[autoplay][popup] next failed:', e);
+          }
+        }, delayMs);
+
+        // cancel autoplay on any user interaction in the popup
+        const popupRoot = container.closest('.in-popup') || container;
+        const cancel = () => {
+          if (__autoplayTimer) { clearTimeout(__autoplayTimer); __autoplayTimer = null; }
+          popupRoot?.removeEventListener('click', cancel);
+          document.removeEventListener('keydown', cancel);
+        };
+        popupRoot?.addEventListener('click', cancel, { once: true });
+        document.addEventListener('keydown', cancel, { once: true });
+        return;
+      }
+
+      // Viewer (non-popup): keep the existing sibling-based prompt flow
+      const nextPath = await computeNextIndexPath(libraryPath);
       if (!nextPath) return;
       showNextPrompt(nextPath);
     } catch (e) {
-      console.warn("[autoplay] failed to compute next:", e);
+      console.warn("[autoplay] failed to compute/schedule next:", e);
     }
   };
 }
@@ -837,6 +878,7 @@ window.stageAutoplayFor = stageAutoplayFor;
 
 // Entry point for root-level navigation
 export async function firstRender(path) {
+  clearSearchInput();
   setLastClickedGroupLabel("");
   renderGroupLabel();
   resetHistory(path);
@@ -1009,6 +1051,7 @@ function renderGroupedAZView(letterGroups, prefix) {
 		const leaf = only.replace(/\/+$/,'').split('/').filter(Boolean).pop() || "";
 		setLastClickedGroupLabel(leaf);
 		renderGroupLabel();
+		clearSearchInput();
         // navigate to the single real folder
         return renderFolder(realFolders[0].slice(0, -1));
       }
@@ -1063,6 +1106,7 @@ function renderStandardFolderView(sortedFolders, sortedFiles, prefix) {
 	li.onclick = () => {
 	  setLastClickedGroupLabel(leaf);
 	  renderGroupLabel();
+	  clearSearchInput();
 	  renderFolder(fullPath.slice(0, -1));
 	};
     ul.appendChild(li);
@@ -1159,6 +1203,13 @@ export function updateSearchVisibility() {
   const searchInput = document.getElementById("media-search");
   if (searchInput) {
 	searchInput.style.display = "block";
+  }
+}
+
+export function clearSearchInput() {
+  const searchInput = document.getElementById("media-search");
+  if (searchInput) {
+    searchInput.value = "";
   }
 }
 
