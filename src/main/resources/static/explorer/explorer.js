@@ -35,6 +35,25 @@ const readGroupPref = () => (localStorage.getItem(GROUP_KEY) ?? "true") === "tru
 let groupAtRoot = readGroupPref(); 
 let groupBindController = null;
 
+const AUTOPLAY_DELAY_KEY = "explorer.autoplayDelayMs";
+// Rotate among Off, 5s, 10s by default; tweak list if you want more
+const AUTOPLAY_DELAY_OPTIONS = [0, 5000, 10000];
+
+function readAutoplayDelayMs() {
+  const raw = localStorage.getItem(AUTOPLAY_DELAY_KEY);
+  const n = Number(raw);
+  if (Number.isFinite(n) && n >= 0) return n;
+  return 5000; // default 5s
+}
+
+function writeAutoplayDelayMs(ms) {
+  try { localStorage.setItem(AUTOPLAY_DELAY_KEY, String(ms)); } catch {}
+}
+
+function formatDelayLabel(ms) {
+  return ms <= 0 ? "Auto: Off" : `Auto: ${Math.round(ms/1000)}s`;
+}
+
 const autoplaySiblingCache = new Map();
 const isPlaylistFile = (name) => (name || "").toLowerCase().endsWith(".m3u");
 const isIndexLeaf = (name) => (name || "").toLowerCase() === "index.m3u8";
@@ -634,6 +653,7 @@ function showNextPrompt(nextPath) {
   if (existing) existing.remove();
 
   const display = displayNameFor(nextPath);
+  const currentDelay = readAutoplayDelayMs();
 
   const prompt = document.createElement('div');
   prompt.id = 'next-prompt';
@@ -647,35 +667,108 @@ function showNextPrompt(nextPath) {
   prompt.style.color = '#fff';
   prompt.style.backdropFilter = 'blur(2px)';
   prompt.style.boxShadow = '0 4px 14px rgba(0,0,0,.35)';
-  prompt.style.zIndex = '9999'; // stronger to ensure above <video>
+  prompt.style.zIndex = '9999'; // above <video>
   prompt.style.maxWidth = '60%';
   prompt.style.pointerEvents = 'auto';
 
+  // countdown chip lives next to the toggle; we update its text while counting
+  const countdownId = `next-countdown-${Date.now()}`;
   prompt.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="opacity:.9">Up next:</span>
       <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45ch">${display}</strong>
-      <button id="next-play-btn" style="margin-left:auto;cursor:pointer;border:0;border-radius:10px;padding:6px 10px">
-        ▶ Play next
-      </button>
-      <button id="next-dismiss-btn" title="Dismiss" style="cursor:pointer;border:0;background:transparent;color:#fff;opacity:.75">✕</button>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+        <span id="${countdownId}" style="opacity:.8"></span>
+        <button id="next-auto-toggle" title="Toggle autoplay delay" style="cursor:pointer;border:0;border-radius:8px;padding:4px 8px;background:#222;color:#ddd">
+          ${formatDelayLabel(currentDelay)}
+        </button>
+        <button id="next-play-btn" style="cursor:pointer;border:0;border-radius:10px;padding:6px 10px">
+          ▶ Play next
+        </button>
+        <button id="next-dismiss-btn" title="Dismiss" style="cursor:pointer;border:0;background:transparent;color:#fff;opacity:.75">✕</button>
+      </div>
     </div>
   `;
 
-  prompt.querySelector('#next-dismiss-btn')?.addEventListener('click', () => {
-    prompt.remove();
+  // ----- controls
+  const elDismiss   = prompt.querySelector('#next-dismiss-btn');
+  const elPlay      = prompt.querySelector('#next-play-btn');
+  const elToggle    = prompt.querySelector('#next-auto-toggle');
+  const elCountdown = prompt.querySelector(`#${countdownId}`);
+
+  let timer = null;
+  let ticker = null;
+  let deadlineTs = 0;
+
+  const clearTimers = () => {
+    if (timer)  { clearTimeout(timer);  timer = null; }
+    if (ticker) { clearInterval(ticker); ticker = null; }
+  };
+
+  const removePrompt = () => {
+    clearTimers();
+    try { prompt.remove(); } catch {}
+  };
+
+  elDismiss?.addEventListener('click', () => {
+    removePrompt();
   });
 
-  prompt.querySelector('#next-play-btn')?.addEventListener('click', async () => {
+  elPlay?.addEventListener('click', async () => {
+    clearTimers();
     try {
-      await playAndStage(nextPath);                    
+      await playAndStage(nextPath);
     } finally {
-      prompt.remove();
+      removePrompt();
     }
   });
 
+  // cycle delay options on each click: Off -> 5s -> 10s -> Off ...
+  elToggle?.addEventListener('click', () => {
+    const cur = readAutoplayDelayMs();
+    const idx = AUTOPLAY_DELAY_OPTIONS.indexOf(cur);
+    const nextIdx = (idx >= 0 ? (idx + 1) % AUTOPLAY_DELAY_OPTIONS.length : 0);
+    const nextVal = AUTOPLAY_DELAY_OPTIONS[nextIdx];
+    writeAutoplayDelayMs(nextVal);
+    elToggle.textContent = formatDelayLabel(nextVal);
+
+    // restart countdown with new value
+    clearTimers();
+    startCountdown(nextVal);
+  });
+
+  function startCountdown(ms) {
+    if (!elCountdown) return;
+    if (ms <= 0) { elCountdown.textContent = formatDelayLabel(0); return; }
+
+    deadlineTs = Date.now() + ms;
+
+    // UI ticker every 250ms
+    const update = () => {
+      const remain = Math.max(0, deadlineTs - Date.now());
+      const s = Math.ceil(remain / 1000);
+      elCountdown.textContent = `Autoplay in ${s}s…`;
+    };
+    update();
+    ticker = setInterval(update, 250);
+
+    // fire actual auto-play
+    timer = setTimeout(async () => {
+      clearTimers();
+      try {
+        await playAndStage(nextPath);
+      } finally {
+        removePrompt();
+      }
+    }, ms);
+  }
+
   container.appendChild(prompt);
   console.log("[autoplay] prompt injected for:", nextPath);
+
+  // kick off with whatever is currently configured
+  startCountdown(currentDelay);
 }
 
 window.addEventListener("playlist:played", (e) => {
