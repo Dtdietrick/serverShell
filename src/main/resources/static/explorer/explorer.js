@@ -1059,7 +1059,6 @@ function renderGroupedAZView(letterGroups, prefix) {
       // Otherwise, show the filtered list in-place (still at root; no history push)
       setLastClickedGroupLabel(letter);
 	  renderGroupLabel();
-      setCurrentPath(prefix);
 
       renderListView({
         folders: fullFolderPaths,
