@@ -289,8 +289,15 @@ function pausePlayback() {
     console.warn("AppPlayer.pause failed:", e);
   }
 
-  // Fallback: pause the media element
-  const mediaEl = document.querySelector('#player-container video, #player-container audio');
+
+  //Prefer the canonical main element
+  let mediaEl = document.getElementById('media-player');
+
+  //Fallback: pick any media in #player-container that is NOT the ambient bg
+  if (!mediaEl) {
+    mediaEl = document.querySelector('#player-container video:not(#ambient-bg), #player-container audio');
+  }
+
   if (mediaEl && typeof mediaEl.pause === "function") {
     mediaEl.autoplay = false;   // guard against auto-resume
     mediaEl.pause();

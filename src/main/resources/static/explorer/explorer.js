@@ -296,6 +296,8 @@ function stopAmbient() {
   const container = document.getElementById("player-container");
   if (container) container.classList.remove("music-ambient-on");
 
+  try { if (window.__ambientRO) { window.__ambientRO.disconnect(); window.__ambientRO = null; } } catch {}
+  
   document.body.classList.remove("ambient-on");
 }
 
@@ -315,7 +317,7 @@ async function startAmbientForMusic() {
     const stage = ensurePlayerStage();
     if (!stage) { console.warn("[ambient] no stage after wait"); return; }
 
-    stopAmbient(); // ensure a clean slate
+    stopAmbient(); // clean slate
 
     const vid = document.createElement("video");
     vid.id = "ambient-bg";
@@ -329,47 +331,70 @@ async function startAmbientForMusic() {
     });
     stage.prepend(vid);
 
-    // give ambient room
-	let _resizeBound = null;
-	const player = mediaEl; // #media-player
-	const sizeStage = () => {
-	  try {
-	    const w = vid.videoWidth  || 1920;
-	    const h = vid.videoHeight || 1080;
-	    const ratio = h / w;
+    // --- sizing (normal vs popup) ---
+    const player   = mediaEl;                 // #media-player
+    const inPopup  = !!stage.closest(".in-popup");
+    player.style.width   = "100%";
+    player.style.display = "block";
+    if (!player.style.position) player.style.position = "relative";
+    if (!player.style.zIndex)   player.style.zIndex   = "1";
 
-	    const stageWidth = stage.clientWidth || player.clientWidth || 800;
-	    const desiredH = Math.round(stageWidth * ratio);
+    let winResizeBound = null;
+    let ro = null;
 
-	    const maxH = Math.round(window.innerHeight * 0.60); 
-	    const minH = 240;                                  
-	    const finalH = Math.max(minH, Math.min(desiredH, maxH));
+    const sizeStage = () => {
+      try {
+        if (inPopup) {
+          // Respect the popup box: lock to the available height of the bounded region.
+          const host = stage.parentElement || stage; // usually #player-container inside the dialog
+          const h = host.clientHeight || player.clientHeight || 360;
+          stage.style.minHeight = h + "px";
+          stage.style.height    = h + "px";
+          player.style.height   = h + "px";
+          player.style.maxHeight= h + "px";
+          return;
+        }
 
-	    // apply to stage
-	    stage.style.minHeight = finalH + "px";
-	    stage.style.height    = finalH + "px";
-        // mirror real player 
+        // Normal view: compute from video AR with sensible caps.
+        const vw = vid.videoWidth  || 1920;
+        const vh = vid.videoHeight || 1080;
+        const ratio = vh / vw;
+
+        const stageWidth = stage.clientWidth || player.clientWidth || 800;
+        const desiredH   = Math.round(stageWidth * ratio);
+
+        const maxH = Math.round(window.innerHeight * 0.60);
+        const minH = 240;
+        const finalH = Math.max(minH, Math.min(desiredH, maxH));
+
+        stage.style.minHeight = finalH + "px";
+        stage.style.height    = finalH + "px";
         player.style.height    = finalH + "px";
         player.style.maxHeight = finalH + "px";
-        player.style.width     = "100%";   
-        player.style.display   = "block";  
-        player.style.position  = player.style.position || "relative";
-        player.style.zIndex    = player.style.zIndex || "1";
       } catch {}
     };
 
-    vid.addEventListener("loadedmetadata", sizeStage);
+    // Place once (fallback AR), then refine when metadata is ready
     sizeStage();
-    _resizeBound = () => sizeStage();
-    window.addEventListener("resize", _resizeBound);
-    vid.addEventListener("error", () => {
-      try { window.removeEventListener("resize", _resizeBound); } catch {}
-    });
+    vid.addEventListener("loadedmetadata", sizeStage);
+
+    // Observe container changes in popup mode; window resize in normal mode
+    if (inPopup) {
+      const host = stage.parentElement || stage;
+      try {
+        ro = new ResizeObserver(sizeStage);
+        ro.observe(host);
+      } catch {}
+    } else {
+      winResizeBound = () => sizeStage();
+      window.addEventListener("resize", winResizeBound);
+    }
 
     // logging
     vid.addEventListener("loadeddata", () => console.log("[ambient] loadeddata"));
     vid.addEventListener("playing",    () => console.log("[ambient] playing"));
     vid.addEventListener("error",      () => console.warn("[ambient] <video> error", vid.error));
+
     const pick = list[Math.floor(Math.random() * list.length)];
     const m3u8Url = await resolveVodM3U8(pick);
     console.log("[ambient] using", m3u8Url);
@@ -379,15 +404,22 @@ async function startAmbientForMusic() {
       _ambientHls.on(window.Hls.Events.ERROR, (_, data) => console.warn("[ambient][hls] error", data));
       _ambientHls.loadSource(m3u8Url);
       _ambientHls.attachMedia(vid);
-      _ambientHls.on(window.Hls.Events.MANIFEST_PARSED, () => vid.play().catch(()=>{}));
+      _ambientHls.on(window.Hls.Events.MANIFEST_PARSED, () => vid.play().catch(() => {})); // ✅ fixed
     } else {
       vid.src = m3u8Url;
-      vid.play().catch(()=>{});
+      vid.play().catch(() => {});
     }
 
     document.body.classList.add("ambient-on");
     addAmbientFullscreenButton(stage, vid);
     document.getElementById("player-container")?.classList.add("music-ambient-on");
+
+    // clean listeners when the video errors out
+    vid.addEventListener("error", () => {
+      try { if (winResizeBound) window.removeEventListener("resize", winResizeBound); } catch {}
+      try { if (ro) ro.disconnect(); } catch {}
+    });
+
   } finally {
     _ambientBooting = false;
   }
