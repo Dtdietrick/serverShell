@@ -254,8 +254,7 @@ function ensurePlayerStage() {
 
   stage = document.createElement("div");                                     
   stage.id = "player-stage";                                                
-  Object.assign(stage.style, { position: "relative", width: "100%",         
-    maxHeight: "70vh" });                                                   
+  Object.assign(stage.style, { position: "relative", width: "100%" });                                                
   mediaEl.insertAdjacentElement("beforebegin", stage);                     
   stage.appendChild(mediaEl);                                              
   if (!mediaEl.style.position) mediaEl.style.position = "relative";         
@@ -263,14 +262,14 @@ function ensurePlayerStage() {
   return stage;                                                            
 }
 
-
 // ambient music video player functions
 function stopAmbient() {                                                    
   try { if (_ambientHls) { _ambientHls.destroy(); _ambientHls = null; } } catch {} 
   const el = document.getElementById("ambient-bg");                         
   if (el && el.parentNode) el.parentNode.removeChild(el);                    
   const container = document.getElementById("player-container");            
-  if (container) container.classList.remove("music-ambient-on");             
+  if (container) container.classList.remove("music-ambient-on");   
+  document.body.classList.remove("ambient-on");          
 }
 
 let _ambientBooting = false;
@@ -329,10 +328,41 @@ async function startAmbientForMusic() {
       vid.play().catch(()=>{});
     }
 
+	document.body.classList.add("ambient-on");
+	addAmbientFullscreenButton(stage, vid);
     document.getElementById("player-container")?.classList.add("music-ambient-on");
   } finally {
     _ambientBooting = false;
   }
+}
+
+function addAmbientFullscreenButton(stage) {
+  stage.querySelectorAll(".ambient-fullscreen-btn").forEach(el => el.remove());
+  const btn = document.createElement("button");
+  btn.className = "ambient-fullscreen-btn";
+  btn.type = "button";
+  btn.title = "Fullscreen ambient";
+  btn.setAttribute("aria-label", "Fullscreen ambient");
+  btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M7 14H5v5h5v-2H7v-3zm0-4h3V7h2v5H7V10zm10 9h-3v2h5v-5h-2v3zm0-14h-5v2h3v3h2V5z"/>
+  </svg>`;
+
+  const toggle = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await stage.requestFullscreen();
+    } catch (e) {
+      console.warn("[ambient] fullscreen toggle failed:", e);
+    }
+  };
+  btn.addEventListener("click", toggle);
+  stage.appendChild(btn);
+
+  document.addEventListener("fullscreenchange", () => {
+    const fs = !!document.fullscreenElement;
+    btn.title = fs ? "Exit fullscreen" : "Fullscreen ambient";
+    btn.setAttribute("aria-label", btn.title);
+  });
 }
 
 function initGroupingToggle() {
