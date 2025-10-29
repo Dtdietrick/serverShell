@@ -679,7 +679,7 @@ function showNextPrompt(nextPath) {
   const container = document.getElementById('player-container');
   if (!container) return;
 
-  // NEW: detect popup; in popup we do headless autoplay (no UI bubble)
+  // detect popup; in popup we do headless autoplay (no UI bubble)
   const inPopup = !!container.closest('.in-popup');
   const currentDelay = readAutoplayDelayMs();
 
@@ -1191,7 +1191,7 @@ function displayNameFor(path) {
   if (last === "index.m3u8") {
     return parts.length >= 2 ? parts[parts.length - 2] : "Video";
   }
-  // NEW: strip ".m3u" extension for nicer titles
+  // strip ".m3u" extension for nicer titles
   if (last.endsWith(".m3u")) {
     const leaf = parts[parts.length - 1];
     return leaf.replace(/\.m3u$/i, "");
