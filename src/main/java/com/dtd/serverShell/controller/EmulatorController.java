@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -50,11 +51,10 @@ public class EmulatorController {
     
     private static final Logger log = LoggerFactory.getLogger(EmulatorController.class);
     
-    private static final class UserPaths {
-        // public on purpose so you can assign exactly like before
-        public Path configPath;   // was: userConfigPath
-        public Path savePath;     // was: userSavePath
-        public Path cookieDir;    // was: userCookieDir
+    private static final class UserPaths {   
+        public Path configPath;   
+        public Path savePath;     
+        public Path cookieDir;   
     }
     private static final class ContainerInfo {
         public final String containerName;
@@ -76,6 +76,11 @@ public class EmulatorController {
     //userDirs
     private final UserPaths userPaths = new UserPaths();
 
+    private String simplifyCoreEmulator(String fullRom) {
+        return (fullRom.endsWith(".gb") || fullRom.endsWith(".gba")) ? "GBA" : "N64";
+    }
+
+    
     @PostMapping("/launch")
     public ResponseEntity<Map<String, String>>launchEmulator(@RequestParam String rom, Principal principal,HttpServletRequest romRequest) {
         if (principal == null) return errorResponse("Unauthorized access");
@@ -92,7 +97,7 @@ public class EmulatorController {
             log.info("[INIT DIR] ROM Save Dir Root: " + romSaveDir);
             log.info("[INIT DIR]  Username: " + username);
             // pre-warm user directory if needed
-            initializeUserRetroarchIfMissing(username);
+            initializeUserRetroarchIfMissing(username, rom);
             // set paths
             Files.createDirectories(userPaths.configPath.toAbsolutePath());
             Files.createDirectories(userPaths.savePath.toAbsolutePath() );
@@ -113,66 +118,62 @@ public class EmulatorController {
                 return errorResponse("[INIT AUDIO ERR] cookie not readable at {}" + hostCookie);
             }
             
-            // startup commands   
-            List<String> cmd = new ArrayList<>(List.of(               
-                "docker", "run", "--rm",
-                 //bind save & config paths
-                 "-v", userPaths.configPath.toAbsolutePath().toAbsolutePath() + ":/config",
-                 "-v", userPaths.savePath.toAbsolutePath()  + ":/save",
-                 //bind & mount ports
-                 "--mount", "type=bind,source=" + pulseSocketPath + ",target=/tmp/pulseaudio.socket,readonly",
-                 "-p", vncPort + ":52300",
-                 "-p", audioPort + ":8081",
-                 //virtual controller
-                 "-p", gamepadPort + ":52400",
-                 // allow virtual pad                   
-                 "-v", "/dev/input:/dev/input", 
-                 "--device", "/dev/uinput", 
-                 // input event/js
-                 "--device-cgroup-rule", "c 13:* rwm", 
-                 "--device-cgroup-rule", "c 10:223 rwm",       
-                 //GPU
-                 "--device", "/dev/dri:/dev/dri",
-                 "-v", "/run/udev:/run/udev:ro",
-                 "--group-add", "993",
-                 "--group-add", "44",
-                 "--group-add", "996", 
-                 "-e", "LIBGL_ALWAYS_SOFTWARE=0",
-                 "-e", "MESA_LOADER_DRIVER_OVERRIDE=radeonsi",   
-                 //VT manager
-                 "--device", "/dev/tty0", 
-                 //VT Devices
-                 "--device", "/dev/tty1", 
-                 "--device", "/dev/tty7",
-                 //control node for tty ioctls   
-                 "--device", "/dev/tty",
-                 // allow Xorg to perform VT/tty ioctls
-                 "--cap-add=SYS_TTY_CONFIG",
-                 "--cap-add=SYS_ADMIN", 
-                 "--security-opt", "seccomp=unconfined",
-                 "--security-opt", "apparmor=unconfined",
-                 //so container can monitor live port (internal bound to 52300)
-                 "-e", "PULSE_SERVER=unix:/tmp/pulseaudio.socket",
-                 //cookie is prewarmed in host dir
-                 "-e", "PULSE_COOKIE=/config/pulse/cookie",
-                 //host audio config
-                 "-e", "PULSE_SINK=retro_null",
-                 "-e", "PULSE_SOURCE=retro_null.monitor",
-                 //set base path (sanity)
-                 "-e", "HOME=/config",
-                 "-e", "XDG_CONFIG_HOME=/config"
-            ));
-                 
-            Integer socketUid = extractUidFromSocketOwner(pulseSocketPath);
-            if (socketUid == null) {
-                return errorResponse("[PULSE AUDIO ERR] Prod audio requires /run/user/<uid>/pulse/native (got: " + pulseSocketPath + ")");
-            }
-                       
             //chose core
             String coreEmulator = (rom.endsWith(".gb") || rom.endsWith(".gba"))
                     ? "mgba_libretro.so"
                     : "mupen64plus_next_libretro.so";
             
+            boolean useGamepad = coreEmulator.contains("mupen64plus_next");
+            
+            // startup commands   
+            List<String> cmd = new ArrayList<>(List.of(
+            	    "docker","run","--rm",
+            	    //directories
+            	    "-v", userPaths.configPath.toAbsolutePath() + ":/config",
+            	    "-v", userPaths.savePath.toAbsolutePath()   + ":/save",
+            	    //bind & mount ports
+            	    "--mount","type=bind,source=" + pulseSocketPath + ",target=/tmp/pulseaudio.socket,readonly",
+            	    "-p", vncPort + ":52300",
+            	    "-p", audioPort + ":8081",
+            	    // GPU
+            	    "--device","/dev/dri:/dev/dri",
+            	    "-v","/run/udev:/run/udev:ro",
+            	    "--group-add","993","--group-add","44","--group-add","996",
+            	    //so container can monitor live port (internal bound to 52300)
+            	    "-e","PULSE_SERVER=unix:/tmp/pulseaudio.socket",
+            	    //cookie is prewarmed in host dir
+            	    "-e","PULSE_COOKIE=/config/pulse/cookie",
+            	    //host audio config
+            	    "-e","PULSE_SINK=retro_null",
+            	    "-e","PULSE_SOURCE=retro_null.monitor",
+            	    //set base path (sanity)
+            	    "-e","HOME=/config","-e","XDG_CONFIG_HOME=/config"
+            	));
+
+            	// N64-only extras
+            	if (useGamepad) {
+            	  cmd.addAll(List.of(
+            	      "-p", gamepadPort + ":52400",
+            	      "-v", "/dev/input:/dev/input",
+            	      "--device", "/dev/uinput",
+            	      "--device-cgroup-rule","c 13:* rwm",
+            	      "--device-cgroup-rule","c 10:223 rwm",
+              	      "-e","LIBGL_ALWAYS_SOFTWARE=0",
+              	      "-e","MESA_LOADER_DRIVER_OVERRIDE=radeonsi",
+              	      "--device","/dev/tty0","--device","/dev/tty1","--device","/dev/tty7","--device","/dev/tty",
+              	      "--cap-add=SYS_TTY_CONFIG","--cap-add=SYS_ADMIN",
+              	      "--security-opt","seccomp=unconfined","--security-opt","apparmor=unconfined",
+            	      "-e", "ENABLE_WSGP=1"                      
+            	  ));
+            	} else {
+            	  cmd.addAll(List.of("-e","ENABLE_WSGP=0"));     
+            	}
+                 
+            Integer socketUid = extractUidFromSocketOwner(pulseSocketPath);
+            if (socketUid == null) {
+                return errorResponse("[PULSE AUDIO ERR] Prod audio requires /run/user/<uid>/pulse/native (got: " + pulseSocketPath + ")");
+            }
+                 
             //name for later cleanup
             String containerName = "emulator-" + username + "-" + vncPort;
             cmd.addAll(List.of("--name", containerName));
@@ -332,10 +333,11 @@ public class EmulatorController {
     }
     
     //prewarm logic
-    private void initializeUserRetroarchIfMissing(String username) throws IOException {
-        Path userRoot = Paths.get(romSaveDir, "users", username);
-        Path configPath = userRoot.resolve("config");
-        Path savePath = userRoot.resolve("save");
+    private void initializeUserRetroarchIfMissing(String username, String rom) throws IOException {
+    	String core = simplifyCoreEmulator(rom);
+    	Path userRoot = Paths.get(romSaveDir, "users", username);
+        Path configPath = userRoot.resolve("config/" + core);
+        Path savePath = userRoot.resolve("save/" + core);
 
         userPaths.configPath = configPath;
         userPaths.savePath = savePath;
@@ -347,8 +349,8 @@ public class EmulatorController {
 
             // Copy default template files
             Path defaultRoot = Paths.get(romSaveDir, "default");
-            Path defaultConfig = defaultRoot.resolve("config");
-            Path defaultsave  = defaultRoot.resolve("save");
+            Path defaultConfig = defaultRoot.resolve("config/" + core);
+            Path defaultsave  = defaultRoot.resolve("save/" + core);
 
             Files.walk(defaultConfig).forEach(source -> {
                 try {
@@ -402,7 +404,7 @@ public class EmulatorController {
         if (principal == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
         String username = principal.getName();
-        Path userSaveDir = Paths.get(romSaveDir, "users", username, "save");
+        Path userSaveDir = userPaths.savePath;
       
         //Sanitize
         Path savePath = userSaveDir.resolve(romFileName).normalize();
@@ -424,7 +426,7 @@ public class EmulatorController {
         if (principal == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
         String username = principal.getName();
-        Path userSaveDir = Paths.get(romSaveDir, "users", username, "save");
+        Path userSaveDir = userPaths.savePath;
       
         //Sanitize
         Path savePath = userSaveDir.resolve(romFileName).normalize();

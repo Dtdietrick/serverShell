@@ -96,6 +96,11 @@ function waitForEmuMount(win, state, retries = 30) {
   setTimeout(() => waitForEmuMount(win, state, retries - 1), 200);
 }
 
+function detectCoreFromRom(rom) {
+  const r = (rom || "").toLowerCase().trim();
+  return (r.endsWith(".gb") || r.endsWith(".gba")) ? "GBA" : "N64";
+}
+
 export function launchEmulator(rom, button) {
   //basic guards
   if (!rom || typeof rom !== "string") throw new Error("[emulator] ROM is required");
@@ -121,6 +126,8 @@ export function launchEmulator(rom, button) {
   if (!__emuWin) { alert("Popup blocked. Please allow popups for this site and try again."); return; }
   if (button) { button.disabled = true; button.textContent = "Launching…"; }
 
+  const coreName = detectCoreFromRom(rom);
+  
   //loader in popup
   function renderLoader(win, romName) {
     try {
@@ -158,7 +165,7 @@ export function launchEmulator(rom, button) {
   // inject popup bootstrap (_emuMount) with pad->parent postMessage (includes sid)
   (function installPopupBootstrap(w) {
 	updateStatus("Contacting server…");
-    const code = [
+    const codeN64 = [
       "(function(){",
 	  
 	  "  var ACTIVE_IDX = -1;",
@@ -288,6 +295,42 @@ export function launchEmulator(rom, button) {
       "})();"
     ].join("\n");
 
+	const codeGBA = [
+	  "(function(){",
+	  "  try {",
+	  "    // Expose mount hook for the parent:",
+	  "    window._emuMount = function(state){",
+	  "      try {",
+	  "        document.title = 'Emulator';",
+	  "        // Replace body with just the VNC iframe",
+	  "        var d = document;",
+	  "        var f = d.createElement('iframe');",
+	  "        f.id = 'vnc-frame';",
+	  "        f.setAttribute('allow','clipboard-read; clipboard-write');",
+	  "        f.style.position = 'fixed';",
+	  "        f.style.inset = '0';",
+	  "        f.style.border = '0';",
+	  "        f.style.width = '100%';",
+	  "        f.style.height = '100%';",
+	  "        d.body.innerHTML = '';",
+	  "        d.body.appendChild(f);",
+	  "        // small defer ensures DOM is ready even if mount is immediate",
+	  "        setTimeout(function(){ try { f.src = state.vncUrl; } catch(_){} }, 50);",
+	  "      } catch (e) {",
+	  "        try { console.error('[popup][GBA] mount error', e); } catch(_){ }",
+	  "      }",
+	  "    };",
+	  "    // signal that bootstrap installed (helps debugging in popup console)",
+	  "    try { console.log('[popup] GBA bootstrap injected'); } catch(_){ }",
+	  "  } catch (e) {",
+	  "    try { console.error('[popup][GBA] bootstrap error', e); } catch(_){ }",
+	  "  }",
+	  "})();"
+	].join('\\n');
+	
+	
+	const code = (coreName === "GBA") ? codeGBA : codeN64;
+	
 	  try {
 	    const s = w.document.createElement('script');
 	    s.textContent = code;
@@ -317,10 +360,13 @@ export function launchEmulator(rom, button) {
 
     const vncUrl     = response.vncUrl;
     const audioUrl   = response.audioUrl;
-    const gamepadUrl = response.gamepadUrl || "";
+    let gamepadUrl = response.gamepadUrl || "";
     if (!vncUrl)  throw new Error("Backend returned no vncUrl");
     if (!audioUrl) throw new Error("Backend returned no audioUrl");
-
+	//gamepad logic only with n64
+	const useGamepad = (coreName === "N64") && !!gamepadUrl;       
+	if (!useGamepad) gamepadUrl = "";
+	    
     const vncPort = extractPortFromUrl(vncUrl);
 	const knownPort = vncPort || 0;
     // assign new session id; only this sid is accepted by forwarder
@@ -340,87 +386,100 @@ export function launchEmulator(rom, button) {
     try { await playWsWebmOpus(audioUrl); updateStatus("Audio connected! Loading game…"); }
     catch (e) { console.error("[emulator] Audio connection failed:", e); updateStatus("Audio error — continuing without sound…"); }
 
-    // parent-side gamepad WS + guarded forwarder
-    // Close prior WS and forwarder if present (avoid duplicates)
-    try { if (__gpWS) __gpWS.close(); } catch {}
-    try { if (__gpForwarder) window.removeEventListener("message", __gpForwarder); } catch {}
-
-	if (!window.__gpForwarder) {
-	  window.__gpForwarder = (evt) => {
-	    try {
-	      if (evt.source !== __emuWin) return;             // only our popup
-	      const m = evt?.data;
-	      if (!m || m.type !== "emu:pad" || !m.payload) return;
-	      if (m.sid !== __currentSid) return;              // ignore stale sessions
-	      if (__gpWS && __gpWS.readyState === WebSocket.OPEN) {
-	        __gpWS.send(JSON.stringify(m.payload));
+	// parent-side gamepad WS + guarded forwarder (N64 ONLY)
+	try { if (__gpWS) __gpWS.close(); } catch {}
+	if (useGamepad) {                                                   
+	  try { if (__gpForwarder) window.removeEventListener("message", __gpForwarder); } catch {}
+	  if (!window.__gpForwarder) {
+	    window.__gpForwarder = (evt) => {
+	      try {
+	        if (evt.source !== __emuWin) return;             // only this popup
+	        const m = evt?.data;
+	        if (!m || m.type !== "emu:pad" || !m.payload) return;
+	        if (m.sid !== __currentSid) return;              // ignore stale sessions
+	        if (__gpWS && __gpWS.readyState === WebSocket.OPEN) {
+	          __gpWS.send(JSON.stringify(m.payload));
+	        }
+	      } catch (e) {
+	        console.error("[parent-gp] forward error:", e);
 	      }
-	    } catch (e) {
-	      console.error("[parent-gp] forward error:", e);
-	    }
-	  };
-	}
-	
-	window.addEventListener("message", window.__gpForwarder, { passive: true });
-	
-	if (gamepadUrl) {
+	    };
+	  }
+	  window.addEventListener("message", window.__gpForwarder, { passive: true });
 	  openParentGamepadWS(gamepadUrl);
+	} else {
+	  // GBA path: ensure no stray listeners remain
+	  try { if (__gpForwarder) window.removeEventListener("message", __gpForwarder); } catch {}
+	  __gpForwarder = null;
+	  __gpWS = null;
 	}
-
+	
     // mount popup when bootstrap is ready
-    updateStatus("Mount popup bootstrap…");
-    let tries = 0; const maxTries = 30; // ~6s
-    const iv = setInterval(() => {
-      try {
-        if (__emuWin && typeof __emuWin._emuMount === "function") {
-          clearInterval(iv);
-          __emuWin._emuMount({ vncUrl, gamepadUrl, vncPort: vncPort || 0, sid }); // pass sid for tagging
-        } else if (++tries > maxTries) {
-          clearInterval(iv);
-          console.error("[emulator] Timed out waiting for popup bootstrap");
-        }
-      } catch (err) {
-        clearInterval(iv);
-        console.error("[emulator] popup mount error:", err);
-      }
-    }, 200);
+    
+	if (coreName === "N64") {
+	  updateStatus("Mount N64 popup bootstrap…");
+	  let tries = 0; const maxTries = 30; // ~6s
+	  const iv = setInterval(() => {
+	    try {
+	      if (__emuWin && typeof __emuWin._emuMount === "function") {
+	        clearInterval(iv);
+	        __emuWin._emuMount({ vncUrl, gamepadUrl, vncPort: vncPort || 0, sid }); // pass sid for tagging
+	      } else if (++tries > maxTries) {
+	        clearInterval(iv);
+	        console.error("[emulator] Timed out waiting for popup bootstrap (core: N64)");
+	        // N64 fallback (last resort): still show VNC so user isn’t stuck
+	        try { __emuWin.location.replace(vncUrl); } catch { __emuWin.location.href = vncUrl; }
+	      }
+	    } catch (err) {
+	      clearInterval(iv);
+	      console.error("[emulator] popup mount error:", err);
+	      try { __emuWin.location.replace(vncUrl); } catch { __emuWin.location.href = vncUrl; }
+	    }
+	  }, 200);
+	} else {
+	  //gba pass through	
+	  updateStatus("Mount GBA popup bootstrap…");
+	  try { __emuWin.location.replace(vncUrl); } catch { __emuWin.location.href = vncUrl; }
+	}
 	
 	
     // parent-side cleanup (on popup close or page unload)
     if (vncPort) {
 		let done = false;
-		const cleanup = () => {
-		  if (done) return; done = true;
-		  try { window.__emuAudioWS && window.__emuAudioWS.close(); } catch {}
-		  try { if (window.__emuAudioEl) { window.__emuAudioEl.pause(); window.__emuAudioEl.src = ""; } } catch {}
-		  try { if (__gpWS) __gpWS.close(); } catch {}
-		  try { if (__gpForwarder) window.removeEventListener("message", __gpForwarder); } catch {}
-		  try { __currentSid = 0; } catch {}
-		  // resilient post + keepalive
-		  postCleanup(knownPort);
-		};
+		const cleanup = () => {		
+			
+	if (done) return; done = true;
+	    try { window.__emuAudioWS && window.__emuAudioWS.close(); } catch {}
+	    try { if (window.__emuAudioEl) { window.__emuAudioEl.pause(); window.__emuAudioEl.src = ""; } } catch {}
+	    if (useGamepad) {                                             
+	      try { if (__gpWS) __gpWS.close(); } catch {}
+	      try { if (__gpForwarder) window.removeEventListener("message", __gpForwarder); } catch {}
+	    }
+	    try { __currentSid = 0; } catch {}
+	    postCleanup(knownPort);
+	  };
+	  
+	// de-dupe any previous watch from an older sid
+	if (__emuCleanupWatch) { try { clearInterval(__emuCleanupWatch); } catch {} __emuCleanupWatch = null; }
 
-		// de-dupe any previous watch from an older sid
-		if (__emuCleanupWatch) { try { clearInterval(__emuCleanupWatch); } catch {} __emuCleanupWatch = null; }
+	// always set a parent heartbeat that watches the popup
+	__emuCleanupWatch = setInterval(() => {
+	  try {
+	    if (!__emuWin || __emuWin.closed) {
+	      clearInterval(__emuCleanupWatch);
+	      __emuCleanupWatch = null;
+	      cleanup();
+	    }
+	  } catch {
+	    // If gone, assume closed and cleanup
+	    clearInterval(__emuCleanupWatch);
+	    __emuCleanupWatch = null;
+	    cleanup();
+	  }
+	}, 1000);
 
-		// always set a parent heartbeat that watches the popup
-		__emuCleanupWatch = setInterval(() => {
-		  try {
-		    if (!__emuWin || __emuWin.closed) {
-		      clearInterval(__emuCleanupWatch);
-		      __emuCleanupWatch = null;
-		      cleanup();
-		    }
-		  } catch {
-		    // If we lose access, assume closed and cleanup
-		    clearInterval(__emuCleanupWatch);
-		    __emuCleanupWatch = null;
-		    cleanup();
-		  }
-		}, 1000);
-
-		// keep parent/tab unload cleanup, using beacon
-		try { window.addEventListener("beforeunload", cleanup); } catch {}
+	// keep parent/tab unload cleanup, using beacon
+	try { window.addEventListener("beforeunload", cleanup); } catch {}
     }
 
     resetUI();
