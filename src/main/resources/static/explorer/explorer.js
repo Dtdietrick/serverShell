@@ -80,7 +80,7 @@ function displayNameWithContext(path) {
   const isKnown = /^(Music|TV|Movies)$/i.test(root);
   const dup = afterRoot && item && afterRoot.toLowerCase() === item.toLowerCase();
 
-  return (isKnown && afterRoot && !dup) ? `Now Playing: ${afterRoot} ➡️ ${item}` : item;
+  return (isKnown && afterRoot && !dup) ? `${afterRoot} ➡️ ${item}` : item;
 }
 
 async function resolveVodM3U8(relPath) {
