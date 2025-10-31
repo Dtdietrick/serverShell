@@ -74,16 +74,59 @@ function openPlaylistPopup() {
 
 function setNowPlayingLabelText(text) {
   if (!playlistMediaLabel) return;
-  const val = (text ?? '').toString().trim();
+
+  // Raw input from callers (often just n.title)
+  const raw = (text ?? '').toString().trim();
+
+  // If caller passed a path-like string, use it. Otherwise derive from nowPlayingPath.
+  // Path-like: starts with "./" or contains a slash.
+  const looksLikePath = raw.startsWith("./") || raw.includes("/");
+  const pathForLabel = looksLikePath ? raw : (nowPlayingPath || "");
+
+  let val = raw;
+
+  if (pathForLabel) {
+    // Normalize "./" and slashes
+    let p = String(pathForLabel)
+      .replace(/^\.\/+/, "")
+      .replace(/^\/+/, "")
+      .replace(/\\/g, "/")
+      .replace(/\/{2,}/g, "/");
+
+    const segs = p.split("/").filter(Boolean);
+    const root = segs[0] || "";
+    const isKnown = root === "Music" || root === "Movies" || root === "TV";
+
+    // Artist (folder under root)
+    const artist = segs.length > 1 ? segs[1] : "";
+
+    // Item: prefer the provided title; else last meaningful leaf
+    let item = raw;
+    if (!item || looksLikePath) {
+      item = segs[segs.length - 1] || "";
+      const low = item.toLowerCase();
+      if (low === "index.m3u8" || low === "index.mp3" || low === "index.m4a") {
+        item = segs[segs.length - 2] || item;
+      }
+    }
+    item = (item || "").trim();
+
+    // Avoid "Artist 🔊 Artist"
+    const dup = artist && item && artist.toLowerCase() === item.toLowerCase();
+
+    // Compose only for known roots with a non-dup artist; else fall back to item or original text
+    val = (isKnown && artist && !dup) ? `🪪 ${artist} 🔊 ${item}` : (item || raw);
+  }
+
+  // Write label
   playlistMediaLabel.textContent = val;
 
-  // If the popup is closed, keep the viewer title in sync
+  // Mirror to viewer title when the label isn't currently in the popup
   const viewerH3 = getViewerMediaTitleEl();
   if (viewerH3 && !playlistMediaLabel.classList.contains('in-popup')) {
     viewerH3.textContent = val;
   }
 }
-
 function moveLabelToPopup() {
   if (!playlistMediaLabel || !playlistPopup) return;
 

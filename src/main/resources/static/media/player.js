@@ -13,17 +13,15 @@
     return window.location.origin + url;
   }
 
-  function _cleanRelPath(p) {                      
+  function _cleanRelPath(p) {                    
     if (!p) return p;
     let s = String(p);
-    // Try to decode a single time; if it wasn't encoded, this is a no-op.
     try { s = decodeURIComponent(s); } catch {}
-    // Normalize slashes and strip leading "./"
     s = s.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "");
-    // Remove a single leading slash so server can join to root cleanly
     s = s.replace(/^\/+/, "");
-    // Hard stop on traversal
-    if (s.includes("..")) throw new Error("Unsafe path");
+    const hasTraversal = /(^|\/)\.\.(?=\/|$)/.test(s);
+    if (hasTraversal) throw new Error("Unsafe path");   
+
     return s;
   }
   
