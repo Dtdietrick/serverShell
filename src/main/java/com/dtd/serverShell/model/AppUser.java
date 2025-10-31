@@ -19,6 +19,10 @@ public class AppUser {
 
     private String role;
 
+    private List<String> recentMovies;
+    private List<String> recentMusic;
+    private List<String> recentTV;
+    
     // Constructors
     public AppUser() {}
 
@@ -72,6 +76,26 @@ public class AppUser {
         this.recentViews = recentViews;
     }
     
+    public List<String> getRecentMovies() {
+        return recentMovies == null ? (recentMovies = new java.util.ArrayList<>()) : recentMovies;
+    }
+    public void setRecentMovies(List<String> recentMovies) {
+        this.recentMovies = recentMovies;
+    }
+
+    public List<String> getRecentMusic() {
+        return recentMusic == null ? (recentMusic = new java.util.ArrayList<>()) : recentMusic;
+    }
+    public void setRecentMusic(List<String> recentMusic) {
+        this.recentMusic = recentMusic;
+    }
+
+    public List<String> getRecentTV() {
+        return recentTV == null ? (recentTV = new java.util.ArrayList<>()) : recentTV;
+    }
+    public void setRecentTV(List<String> recentTV) {
+        this.recentTV = recentTV;
+    }
     //ROM Data
     private Map<String, String> recentRomSaves; // key: rom name, value: save path or timestamp
     

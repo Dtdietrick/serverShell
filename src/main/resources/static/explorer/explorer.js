@@ -69,6 +69,20 @@ function readLocalFavorites(category) {
   }
 }
 
+function displayNameWithContext(path) {
+  const rel = normalizeRelForClient(path);
+  const segs = rel.split("/").filter(Boolean);         
+  const root = segs[0] || "";
+  const afterRoot = segs[1] || "";                     
+  const item = displayNameFor(rel);                    
+
+  // only prefix when under known roots AND it won't duplicate
+  const isKnown = /^(Music|TV|Movies)$/i.test(root);
+  const dup = afterRoot && item && afterRoot.toLowerCase() === item.toLowerCase();
+
+  return (isKnown && afterRoot && !dup) ? `Now Playing: ${afterRoot} ➡️ ${item}` : item;
+}
+
 async function resolveVodM3U8(relPath) {
   const clean = String(relPath).replace(/^\/+/, "");
   const res = await fetch("/media/vod", {
@@ -657,9 +671,9 @@ async function computeNextIndexPath(currentFullPath) {
 export async function playAndStage(path) {                          
   const rel = normalizeRelForClient(path);                   
 
-  const display = displayNameFor(rel);                        
-  const viewerHeader = document.querySelector('#viewer-player h3'); 
-  if (viewerHeader) viewerHeader.textContent = display;     
+  const display = displayNameWithContext(rel);
+  const viewerHeader = document.querySelector('#viewer-player h3');
+  if (viewerHeader) viewerHeader.textContent = display;    
   setCurrentPath(rel);                                       
 
 

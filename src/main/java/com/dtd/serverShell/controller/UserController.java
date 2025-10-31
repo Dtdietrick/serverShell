@@ -54,23 +54,24 @@ public class UserController {
         return ResponseEntity.ok("Password updated.");
     }
     
+
+
     @GetMapping("/dashboard")
     public ResponseEntity<Map<String, Object>> getDashboard(Principal principal) {
         if (principal == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
-        Optional<AppUser> userOpt = userRepository.findByUsername(principal.getName());
-        return userOpt.map(user -> {
+        return userRepository.findByUsername(principal.getName()).map(user -> {
             Map<String, Object> dashboard = new HashMap<>();
 
-            // legacy: keep the raw string list
-            dashboard.put("recentViews", user.getRecentViews()); // unchanged
-            // build a richer table-friendly array
-            var detailed = user.getRecentViews() == null ? java.util.List.<Map<String, String>>of()
-                : user.getRecentViews().stream().map(UserController::toDetailedViewRow).toList();
-            dashboard.put("recentViewsDetailed", detailed);
+        // Only per-category lists for the UI
+        dashboard.put("recentMovies", user.getRecentMovies());
+        dashboard.put("recentMusic",  user.getRecentMusic());
+        dashboard.put("recentTV",     user.getRecentTV());
 
-            dashboard.put("recentRomSaves", user.getRecentRomSaves());
-            return ResponseEntity.ok(dashboard);
+        // not using currently
+        //dashboard.put("recentRomSaves", user.getRecentRomSaves());
+
+        return ResponseEntity.ok(dashboard);
         }).orElse(ResponseEntity.notFound().build());
     }
     

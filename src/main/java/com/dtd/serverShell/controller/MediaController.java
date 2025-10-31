@@ -167,7 +167,13 @@ public class MediaController {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
                 String username = auth.getName();
-                userProfileService.recordView(username, folderRel); // <-- inject this service
+                try {
+                    userProfileService.recordView(username, folderRel);
+                } catch (java.util.ConcurrentModificationException cme) {
+                    log.warn("[VOD] recentViews race; skipping recordView this time", cme);
+                } catch (Exception ex) {
+                    log.warn("[VOD] recordView failed (non-fatal)", ex);
+                }
             }
             
             log.info("[VOD] Resolved manifest: {} -> {}", manifest, url);

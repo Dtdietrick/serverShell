@@ -48,26 +48,66 @@ public class UserService {
         return s;
     }
     
+    
     public void recordView(String username, String filenameOrFolder) {
         final String key = normalizeRecentPath(filenameOrFolder);
+        if (key == null) return;
 
-        if (key != null && key.replace('\\', '/').startsWith(pixelartDir + "/")) {
+        // Normalize to forward slashes and strip a single leading slash if present
+        final String norm = key.replace('\\', '/');                         // [UserProfileService.java]
+        final String noLead = norm.startsWith("/") ? norm.substring(1) : norm;
+
+        // Skip PIXELART_DIR
+        if (noLead.startsWith(pixelartDir.endsWith("/") ? pixelartDir : (pixelartDir + "/"))) {
             return;
         }
 
-        Optional<AppUser> userOpt = userRepository.findByUsername(username);
-        userOpt.ifPresent(user -> {
-            List<String> history = user.getRecentViews();
-            if (history == null) history = new ArrayList<>();
+        // Category = first path segment (Movies|Music|TV)
+        final int slash = noLead.indexOf('/');
+        final String firstSeg = (slash == -1) ? noLead : noLead.substring(0, slash);
 
-            history.remove(key);
-            history.add(0, key);
-            if (history.size() > 20) {
-                history = history.subList(0, 20);
+        enum Cat { MOVIES, MUSIC, TV, NONE }
+        final Cat cat = switch (firstSeg) {
+            case "Movies" -> Cat.MOVIES;
+            case "Music"  -> Cat.MUSIC;
+            case "TV"     -> Cat.TV;
+            default       -> Cat.NONE;
+        };
+
+        userRepository.findByUsername(username).ifPresent(user -> {
+            // Copy-on-write: read existing list, copy it, mutate the copy, then set it back.
+            switch (cat) {                                                  // [UserProfileService.java]
+                case MOVIES -> {
+                    List<String> src = user.getRecentMovies();
+                    List<String> updated = moveToFrontWithCapCopy(src, norm, 10);
+                    user.setRecentMovies(updated);
+                }
+                case MUSIC -> {
+                    List<String> src = user.getRecentMusic();
+                    List<String> updated = moveToFrontWithCapCopy(src, norm, 10);
+                    user.setRecentMusic(updated);
+                }
+                case TV -> {
+                    List<String> src = user.getRecentTV();
+                    List<String> updated = moveToFrontWithCapCopy(src, norm, 10);
+                    user.setRecentTV(updated);
+                }
+                case NONE -> { /* ignore anything outside our three roots */ }
             }
 
-            user.setRecentViews(history);
             userRepository.save(user);
         });
+    }
+
+    // [UserProfileService.java] CHANGE: return a fresh list; never mutate the caller's list.
+    private static List<String> moveToFrontWithCapCopy(List<String> src, String value, int max) {
+        List<String> list = (src == null) ? new ArrayList<>() : new ArrayList<>(src);   // copy  // [UserProfileService.java]
+        list.remove(value);
+        list.add(0, value);
+        if (list.size() > max) {
+            // Keep first 'max' items — return as a brand-new list to avoid subList view issues
+            list = new ArrayList<>(list.subList(0, max));
+        }
+        return list;
     }
 }

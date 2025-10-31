@@ -13,6 +13,20 @@
     return window.location.origin + url;
   }
 
+  function _cleanRelPath(p) {                      
+    if (!p) return p;
+    let s = String(p);
+    // Try to decode a single time; if it wasn't encoded, this is a no-op.
+    try { s = decodeURIComponent(s); } catch {}
+    // Normalize slashes and strip leading "./"
+    s = s.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "");
+    // Remove a single leading slash so server can join to root cleanly
+    s = s.replace(/^\/+/, "");
+    // Hard stop on traversal
+    if (s.includes("..")) throw new Error("Unsafe path");
+    return s;
+  }
+  
   async function stopAllMedia() {
     try {
       if (hls) { try { hls.destroy(); } catch {} hls = null; }
@@ -185,10 +199,11 @@
   }
   
   async function startVod(pathOrFolder) {
+    const clean = _cleanRelPath(pathOrFolder);    
     const res = await fetch('/media/vod', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: pathOrFolder })
+      body: JSON.stringify({ path: clean })        
     });
     if (!res.ok) throw new Error(`VOD resolve failed: ${res.status} ${res.statusText}`);
     const { m3u8, error } = await res.json();

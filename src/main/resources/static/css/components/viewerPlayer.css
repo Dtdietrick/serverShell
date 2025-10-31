@@ -62,7 +62,6 @@
   border: 1px solid rgba(120,200,255,.55);
   box-shadow: 0 0 0 2px rgba(0,140,255,.25), 0 6px 16px rgba(0,0,0,.45);
   display: inline-flex; align-items: center; justify-content: center;
-  font: 16px/1 system-ui, sans-serif;
   cursor: pointer; user-select: none;
   transition: transform .12s ease, background .12s ease, box-shadow .12s ease, opacity .12s ease;
 }

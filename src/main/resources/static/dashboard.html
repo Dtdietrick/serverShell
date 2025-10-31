@@ -14,17 +14,6 @@
       <a href="/index.html" class="contrast" role="button">Back to Media Explorer</a>
     </p>
     
-    <h2>Recently Viewed Items</h2>
-	<table id="recent-views" role="grid" class="striped">
-	  <thead>
-	    <tr>
-	      <th style="width: 38ch;">📁 Media Directory</th>
-	      <th>📽️🎵 Recently Played</th>
-	    </tr>
-	  </thead>
-	  <tbody></tbody>
-	</table>
-
    <!--  <h2>ROM Saves</h2>  -->
    <!--  <ul id="rom-saves"></ul>  -->
   </main>
@@ -45,55 +34,86 @@
   <script src="/util/adminDashboard.js"></script>
   
   <script>
-	fetch('/user/dashboard')
-	    .then(res => res.json())
-	    .then(data => {
-	      const table = document.getElementById('recent-views');
-	      const tbody = table.querySelector('tbody');
+  fetch('/user/dashboard')
+    .then(r => r.json())
+    .then(data => {
+      const main = document.querySelector('main.container');
+      const legacyTable = document.getElementById('recent-views'); if (legacyTable) legacyTable.remove();
 
-	      if (Array.isArray(data.recentViewsDetailed) && data.recentViewsDetailed.length) {
-	        // New detailed rendering
-	        data.recentViewsDetailed.forEach(row => {
-	          const tr = document.createElement('tr');
+      function buildTable(title, paths, tableId) {
+        const section = document.createElement('section');
+        const h2 = document.createElement('h2'); h2.textContent = title; section.appendChild(h2);
 
-	          const tdFolder = document.createElement('td');
-	          tdFolder.textContent = row.folderName || "";
-
-	          const tdItem = document.createElement('td');
-	          const a = document.createElement('a');
-	          a.href = `/index.html?jumpTo=${encodeURIComponent(row.path)}`;
-	          a.textContent = row.itemName || row.path.split('/').pop();
-	          tdItem.appendChild(a);
-
-	          tr.appendChild(tdFolder);
-	          tr.appendChild(tdItem);
-	          tbody.appendChild(tr);
-	        });
-	      } else {
-	        // Legacy fallback (old array of strings)
-	        const viewsList = document.createElement('ul');
-	        data.recentViews?.forEach(item => {
-	          const li = document.createElement('li');
-	          const a = document.createElement('a');
-	          a.href = `/index.html?jumpTo=${encodeURIComponent(item)}`;
-	          const parts = String(item).split('/');
-	          a.textContent = parts[parts.length - 1];
-	          li.appendChild(a);
-	          viewsList.appendChild(li);
-	        });
-	        table.replaceWith(viewsList);
-	      }
-
-        const savesList = document.getElementById('rom-saves');
-        if (data.recentRomSaves) {
-          Object.entries(data.recentRomSaves).forEach(([rom, file]) => {
-            const li = document.createElement('li');
-            li.textContent = `${rom} → ${file}`;
-            savesList.appendChild(li);
-          });
+        if (!Array.isArray(paths) || paths.length === 0) {
+          const p = document.createElement('p'); p.textContent = 'No recent items.'; section.appendChild(p);
+          return section;
         }
-      });
-      
+
+        const table = document.createElement('table');
+        table.id = tableId; table.setAttribute('role','grid'); table.className = 'striped';
+        const thead = document.createElement('thead');
+        thead.innerHTML = '<tr><th style="width:38ch;">📁 Media Directory</th><th>🔗 Recently Played</th></tr>';
+        const tbody = document.createElement('tbody');
+
+        paths.forEach(raw => {
+          const norm = String(raw || '').replace(/\\/g, '/');
+          const normNoLead = norm.replace(/^\/+/, '');      
+          const segs = normNoLead.split('/');               
+          const root = segs[0] || '';
+          const afterRoot = segs[1] || '';
+
+          // label
+          let mediaLabel;
+          switch (root) {
+            case 'Music':  mediaLabel = afterRoot || '(Unknown)'; break;
+            case 'TV':     mediaLabel = afterRoot || '(Unknown)';   break;
+            case 'Movies': mediaLabel = afterRoot || '(Unknown)';  break;
+            default:
+              // fallback: parent folder name if we don’t recognize the root
+              mediaLabel = segs.length > 1 ? segs[segs.length - 2] : '/';
+          }
+
+          // Item name = last segment
+          const itemName = segs[segs.length - 1] || normNoLead;
+
+          const tr = document.createElement('tr');
+
+          const tdFolder = document.createElement('td');
+          tdFolder.textContent = mediaLabel;       
+
+          const tdItem = document.createElement('td');
+          const a = document.createElement('a');
+          a.href = `/index.html?jumpTo=${encodeURIComponent(norm)}`;
+          a.textContent = itemName;
+          tdItem.appendChild(a);
+
+          tr.appendChild(tdFolder);
+          tr.appendChild(tdItem);
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(thead); table.appendChild(tbody); section.appendChild(table);
+        return section;
+      }
+
+      const movies = buildTable('🎬 Recently Watched — Movies', data.recentMovies, 'recent-movies');
+      const music  = buildTable('🎵 Recently Played — Music',  data.recentMusic,  'recent-music');
+      const tv     = buildTable('📺 Recently Watched — TV',     data.recentTV,     'recent-tv');
+
+      const anchor = main.querySelector('h2, section, table, form');
+      [movies, music, tv].forEach(sec => main.insertBefore(sec, anchor || null));
+
+      // Preserve your existing ROM saves + password change wiring
+      const savesList = document.getElementById('rom-saves');
+      if (data.recentRomSaves && savesList) {
+        Object.entries(data.recentRomSaves).forEach(([rom, file]) => {
+          const li = document.createElement('li');
+          li.textContent = `${rom} → ${file}`;
+          savesList.appendChild(li);
+        });
+      }    
+  });
+
       document.getElementById("password-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         
