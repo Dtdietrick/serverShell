@@ -115,7 +115,7 @@ function setNowPlayingLabelText(text) {
     const dup = artist && item && artist.toLowerCase() === item.toLowerCase();
 
     // Compose only for known roots with a non-dup artist; else fall back to item or original text
-    val = (isKnown && artist && !dup) ? `🪪 ${artist} 🔊 ${item}` : (item || raw);
+    val = (isKnown && artist && !dup) ? `🔎 ${artist} 🔊 ${item}` : (item || raw);
   }
 
   // Write label

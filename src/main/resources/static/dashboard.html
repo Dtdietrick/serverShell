@@ -14,24 +14,27 @@
       <a href="/index.html" class="contrast" role="button">Back to Media Explorer</a>
     </p>
     
+	<h2>🔐 Change Password 🔐</h2>
+	  <form id="password-form">
+	    <label for="currentPassword">Current Password</label>
+	    <input type="password" id="currentPassword" name="currentPassword" required>
+
+	    <label for="newPassword">New Password</label>
+	    <input type="password" id="newPassword" name="newPassword" required>
+
+	    <button type="submit">⚠️ Update Password (CANNOT BE UNDONE) ⚠️</button>
+	    <p id="password-message" style="margin-top: 0.5rem;"></p>
+	  </form>
+	  
+	  <div id="admin-panel" style="display: none;"></div>
+	  <script src="/util/adminDashboard.js"></script>
+	  
+	<h2> 📒 Recently Viewed Media 📒</h2>
    <!--  <h2>ROM Saves</h2>  -->
    <!--  <ul id="rom-saves"></ul>  -->
   </main>
 
-  <h2>Change Password</h2>
-  <form id="password-form">
-    <label for="currentPassword">Current Password</label>
-    <input type="password" id="currentPassword" name="currentPassword" required>
-
-    <label for="newPassword">New Password</label>
-    <input type="password" id="newPassword" name="newPassword" required>
-
-    <button type="submit">🔐 Update Password</button>
-    <p id="password-message" style="margin-top: 0.5rem;"></p>
-  </form>
   
-  <div id="admin-panel" style="display: none;"></div>
-  <script src="/util/adminDashboard.js"></script>
   
   <script>
   fetch('/user/dashboard')
@@ -96,24 +99,31 @@
         return section;
       }
 
-      const movies = buildTable('🎬 Recently Watched — Movies', data.recentMovies, 'recent-movies');
-      const music  = buildTable('🎵 Recently Played — Music',  data.recentMusic,  'recent-music');
-      const tv     = buildTable('📺 Recently Watched — TV',     data.recentTV,     'recent-tv');
+	  const music  = buildTable('🎵 Music',  data.recentMusic,  'recent-music');
+	  const tv     = buildTable('📺 TV',     data.recentTV,     'recent-tv');
+	  const movies = buildTable('🎬 Movies', data.recentMovies, 'recent-movies');
+      
+      //pin recent views under thier header                 
+	  const rvHeader = Array.from(main.querySelectorAll('h2'))
+	    .find(h => /recently\s*viewed\s*media/i.test(h.textContent)); 
 
-      const anchor = main.querySelector('h2, section, table, form');
-      [movies, music, tv].forEach(sec => main.insertBefore(sec, anchor || null));
+	  //build tables	
+	  const frag = document.createDocumentFragment();                           
+	  [music, tv, movies].forEach(sec => frag.appendChild(sec));                 
+	  rvHeader.after(frag);    
+   });
 
-      // Preserve your existing ROM saves + password change wiring
-      const savesList = document.getElementById('rom-saves');
-      if (data.recentRomSaves && savesList) {
-        Object.entries(data.recentRomSaves).forEach(([rom, file]) => {
-          const li = document.createElement('li');
-          li.textContent = `${rom} → ${file}`;
-          savesList.appendChild(li);
-        });
-      }    
-  });
+         // Roms house their own save logic now
 
+   //      const savesList = document.getElementById('rom-saves');
+   //      if (data.recentRomSaves && savesList) {
+   //        Object.entries(data.recentRomSaves).forEach(([rom, file]) => {
+   //          const li = document.createElement('li');
+   //          li.textContent = `${rom} → ${file}`;
+   //          savesList.appendChild(li);
+   //        });
+   //      }  
+   
       document.getElementById("password-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         
