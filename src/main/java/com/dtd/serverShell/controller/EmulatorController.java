@@ -37,6 +37,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequestMapping("/emulator")
 public class EmulatorController {
 
+    @Value("${host.ip}")
+    private String hostIP;
+    
     @Value("${rom.save.dir}")
     private String romSaveDir;
 
@@ -186,7 +189,7 @@ public class EmulatorController {
             Process containerProcess = pb.start();
 
             activeContainers.put(String.valueOf(vncPort), new ContainerInfo(containerName, containerProcess));
-            String serverIp = InetAddress.getLocalHost().getHostAddress();
+            String serverIp = hostIP;
             String vncUrl = "http://" + serverIp + ":" + vncPort + "/vnc.html?autoconnect=true&resize=scale&path=websockify";
             String audioUrl = "ws://" + serverIp + ":" + audioPort + "/";
             String gamepadUrl = "ws://" + serverIp + ":" + gamepadPort + "/";
