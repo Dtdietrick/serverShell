@@ -34,6 +34,7 @@ function randomizer(seed) {
     return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
   };
 }
+
 function hashSeed(s) {
   // cheap integer hash from string
   let h = 2166136261 >>> 0;
@@ -42,6 +43,13 @@ function hashSeed(s) {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
+}
+
+//quick exit shuffle (one-shot)
+function exitShuffleMode() {
+  playlistMode = "linear";
+  __shuffle = null;
+  if (typeof updateShuffleButton === "function") updateShuffleButton(); 
 }
 
 function makeShuffledOrder(n, lastIdx, seed) {
@@ -299,6 +307,7 @@ function renderLiForItem(nItem, idx) {
     ${nItem.duration ? `<span class="chip">${formatDuration(nItem.duration)}</span>` : ""}
   `;
   li.onclick = () => {
+	exitShuffleMode();
     setActiveIndex(idx);
     playSelected(nItem);
   };
@@ -445,11 +454,15 @@ function playNextShuffled() {
   // Move cursor and pick item
   __shuffle.cursor++;
   if (__shuffle.cursor >= __shuffle.order.length) {
-    // reshuffle new cycle, avoid immediate repeat
-    __shuffle.order = makeShuffledOrder(currentPlaylist.length, currentTrackIndex, __shuffle.seed ^ hashSeed(String(Date.now())));
+    // If this ever hits, we still avoid repeating the last track
+    __shuffle.order = makeShuffledOrder(
+      currentPlaylist.length,
+      currentTrackIndex,
+      __shuffle.seed ^ hashSeed(String(Date.now()))
+    );
     __shuffle.cursor = 0;
   }
-
+  
   const idx = __shuffle.order[__shuffle.cursor];
   if (idx === currentTrackIndex && currentPlaylist.length > 1) {
     // ultra-rare edge case; bump once more
@@ -458,7 +471,7 @@ function playNextShuffled() {
 
   const nextIdx = __shuffle.order[__shuffle.cursor];
   setActiveIndex(nextIdx);
-  ensureActiveVisible();
+  if (typeof ensureActiveVisible === "function") ensureActiveVisible();
   playSelected(currentPlaylist[nextIdx]);
 }
 
@@ -472,6 +485,7 @@ export function nextInPlaylist() {
 	
   if (currentTrackIndex < currentPlaylist.length - 1) {
     setActiveIndex(currentTrackIndex + 1);
+	if (typeof ensureActiveVisible === "function") ensureActiveVisible();
     playSelected(currentPlaylist[currentTrackIndex]); 
   } else {
     const before = currentPlaylist.length;
@@ -479,6 +493,7 @@ export function nextInPlaylist() {
     setTimeout(() => {
       if (currentPlaylist.length > before) {
         setActiveIndex(currentTrackIndex + 1);
+		if (typeof ensureActiveVisible === "function") ensureActiveVisible();
         playSelected(currentPlaylist[currentTrackIndex]); 
       }
     }, 400);
@@ -515,6 +530,7 @@ export function shufflePlaylist() {
   // If nothing playing yet, just pick the first from the order (guaranteed != lastIdx when n>1).
   if (currentTrackIndex >= 0) {
     playNextShuffled();
+	exitShuffleMode();
   } else {
     const seed = hashSeed(String(currentPlaylistName)) ^ hashSeed(String(Date.now()));
     __shuffle = { seed, order: makeShuffledOrder(currentPlaylist.length, -1, seed), cursor: 0 };
@@ -522,6 +538,7 @@ export function shufflePlaylist() {
     setActiveIndex(idx);
 	ensureActiveVisible();
     playSelected(currentPlaylist[idx]);
+	exitShuffleMode();
   }
 
   // If hydration hasn’t finished yet, it will re-seed and expand the order when complete.
