@@ -75,13 +75,22 @@
 /* Controls bar */
 #playlist-controls {
   display: flex;
-  justify-content: center;
-  gap: .5rem;
-  padding: .75rem .5rem;
-  border-top: 1px solid #2b3140;
-  border-bottom: 1px solid #2b3140;
-  background: #0d1016;
+  align-items: center;
+  gap: 0.5rem;            
 }
+
+#playlist-controls button {
+  font-size: 0.75rem;     
+  padding: 0.25rem 0.5rem;
+  line-height: 1;         
+  min-height: 1.6rem;     
+  border-radius: 0.25rem; 
+}
+
+#playlist-controls #shuffle-button {
+  font-weight: 500;      
+}
+
 #playlist-controls button.disabled {
   opacity: .45;
   pointer-events: none;
@@ -101,7 +110,7 @@
 /* Body wrapper that owns the remaining height */
 #playlist-body {
   flex: 1 1 auto;
-  min-height: 16rem;         
+  min-height: 0;         
   max-height: none;         
   display: flex;
   flex-direction: column;
@@ -111,14 +120,17 @@
   border-top: 1px solid #2b3140;
 }
 
-
 /* The UL fills the body and scrolls INSIDE the popup */
 #playlist-items {
   flex: 1 1 auto;
+  min-height: 0; 
   overflow-y: auto;
   margin: 0;
   padding: .25rem .5rem;
   box-sizing: border-box;
+  overscroll-behavior: contain;
+  
+  scroll-padding-top: 64px;
 }
 
 /* Rows */
@@ -133,6 +145,7 @@
   align-items: center;
   justify-content: space-between;
   background: #111823;
+  scroll-margin-top: 76px;  
 }
 
 .media-row {

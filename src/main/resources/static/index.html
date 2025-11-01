@@ -96,18 +96,17 @@
 	  <span class="close-btn" onclick="closePlaylist()">✖</span>
 	  <h3>📜 Playlist</h3>
 	  <div id="playlist-media">Now Playing ...</div>
-
-	  <input id="playlist-search" placeholder="Filter tracks…" />
-
-	  <!-- Player docked inside the dialog -->
-	  <div id="popup-player"></div>
-
-	  <!-- Controls pinned; list scrolls below -->
+	  
+	  <!-- Controls pinned top; viewer and list below -->
 	  <div id="playlist-controls">
+	  <input id="playlist-search" placeholder="Filter tracks…" />
 	    <button onclick="prevInPlaylist()">⏮ Prev</button>
 	    <button onclick="nextInPlaylist()">⏭ Next</button>
 	    <button id="shuffle-button" onclick="shufflePlaylist()">Shuffle</button>
 	  </div>
+	  
+	  <!-- Player docked inside the dialog -->
+	  <div id="popup-player"></div>
 
 	  <!-- body wrapper gives the list a bounded region -->
 	  <div id="playlist-body">

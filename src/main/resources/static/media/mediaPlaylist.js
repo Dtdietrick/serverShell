@@ -69,12 +69,16 @@ function makeShuffledOrder(n, lastIdx, seed) {
 }
 
 function ensureActiveVisible() {
-  const el = playlistItems?.querySelector?.(".playlist-item.active") 
-          || playlistItems?.children?.[currentTrackIndex];
+  var list = document.getElementById("playlist-items") || playlistItems; 
+  if (!list) return;
+
+  var el = list.querySelector(".playlist-item.active") ||
+           (list.children && list.children[currentTrackIndex]);
   if (!el) return;
+
   try {
     el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-  } catch {}
+  } catch (e) { /* no-op */ }
 }
 	
 //keep DOM in sync (no autoplay side-effects)
@@ -241,12 +245,19 @@ function moveLabelToPopup() {
   if (!playlistMediaLabel || !playlistPopup) return;
 
   // Ensure the label element is placed back inside the popup UI (but we never move it out anymore)
-  const search = document.getElementById('playlist-search');
-  if (search && search.parentElement === playlistPopup) {
-    playlistPopup.insertBefore(playlistMediaLabel, search);
-  } else if (playlistItems) {
-    playlistPopup.insertBefore(playlistMediaLabel, playlistItems);
-  } else {
+  const controls = document.getElementById('playlist-controls');
+  const search   = document.getElementById('playlist-search');
+  
+  /// If controls row exists at top, put label right BEFORE it
+  if (controls && controls.parentElement) {
+    controls.parentElement.insertBefore(playlistMediaLabel, controls);
+  }
+  // Else, if the list exists, insert the label right BEFORE the <ul> **in the UL's parent**
+  else if (playlistItems && playlistItems.parentElement) {
+    playlistItems.parentElement.insertBefore(playlistMediaLabel, playlistItems);
+  }
+  // Fallback: append to popup
+  else {
     playlistPopup.appendChild(playlistMediaLabel);
   }
 
@@ -302,9 +313,12 @@ function normalizeItem(item) {
 
 function renderLiForItem(nItem, idx) {
   const li = document.createElement("li");
+  li.className = "playlist-item";  
   li.innerHTML = `
-    <span class="title" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nItem.title}</span>
-    ${nItem.duration ? `<span class="chip">${formatDuration(nItem.duration)}</span>` : ""}
+	<span id="media-scroll" class="media-row">
+	  <span class="title" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nItem.title}</span>
+	  ${nItem.duration ? `<span class="chip">${formatDuration(nItem.duration)}</span>` : ""}
+	</span>
   `;
   li.onclick = () => {
 	exitShuffleMode();
