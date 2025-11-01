@@ -21,6 +21,108 @@ let savedViewerHeading = null;
 //remember original player mount to move it into popup
 let originalPlayerParent = null;
 
+let playlistMode = "linear";  // "linear" | "shuffle"
+let __shuffle = null;         // { order:number[], cursor:number, seed:number }
+
+// real shuffle
+function randomizer(seed) {
+  let t = seed >>> 0;
+  return function() {
+    t += 0x6D2B79F5;
+    let x = Math.imul(t ^ (t >>> 15), 1 | t);
+    x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashSeed(s) {
+  // cheap integer hash from string
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function makeShuffledOrder(n, lastIdx, seed) {
+  const rng = randomizer(seed);
+  const a = Array.from({ length: n }, (_, i) => i);
+  // Fisher–Yates
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  // Avoid immediate repeat if possible
+  if (n > 1 && a[0] === lastIdx) {
+    const swapWith = Math.floor(rng() * (n - 1)) + 1;
+    [a[0], a[swapWith]] = [a[swapWith], a[0]];
+  }
+  return a;
+}
+
+function ensureActiveVisible() {
+  const el = playlistItems?.querySelector?.(".playlist-item.active") 
+          || playlistItems?.children?.[currentTrackIndex];
+  if (!el) return;
+  try {
+    el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  } catch {}
+}
+	
+//keep DOM in sync (no autoplay side-effects)
+async function hydrateFullPlaylistInBackground() {
+  // If we already exhausted pages, nothing to do.
+  if (!playlistHasMore) return;
+
+  // Continue fetching pages (offset/limit already tracked globally)
+  while (playlistHasMore && !playlistLoading) {
+    playlistLoading = true;
+    updateShuffleButton();
+    try {
+      const qs = new URLSearchParams({
+        path: currentPlaylistName,
+        offset: String(playlistOffset),
+        limit: String(playlistLimit)
+      });
+      const items = await fetch(`/media/playlist?${qs}`).then(r => r.json());
+
+      if (!Array.isArray(items) || items.length === 0) {
+        playlistHasMore = false;
+        break;
+      }
+
+      // Append to DOM & currentPlaylist, matching loadPlaylist() behavior
+      items.forEach((raw, i) => {
+        const n = normalizeItem(raw);
+        // guard against dupes
+        if (!currentPlaylist.some(x => x.path === n.path)) {
+          const li = renderLiForItem(n, currentPlaylist.length);
+          playlistItems.appendChild(li);
+          currentPlaylist.push(n);
+        }
+      });
+
+      playlistOffset += items.length;
+    } catch (e) {
+      console.warn("[playlist][hydrate] failed:", e);
+      break; // bail; UI still works with what we have
+    } finally {
+      playlistLoading = false;
+      updateShuffleButton();
+    }
+  }
+
+  // If shuffle mode is active, (re)build order to include all hydrated items
+  if (playlistMode === "shuffle") {
+    const seed = (__shuffle?.seed ?? hashSeed(String(currentPlaylistName))) ^ hashSeed(String(Date.now()));
+    __shuffle = {
+      seed,
+      order: makeShuffledOrder(currentPlaylist.length, currentTrackIndex, seed),
+      cursor: -1
+    };
+  }
+}
+
 //autoplay
 let __popupAutoplayTimer = null;
 const AUTOPLAY_DELAY_KEY = "explorer.autoplayDelayMs";
@@ -268,11 +370,14 @@ function formatDuration(sec) {
 
 export function loadPlaylist(nameOrPath, reset = true) {
   if (reset) {
+	playlistMode = "linear";        
+	__shuffle = null; 
     currentPlaylistName = nameOrPath;
     playlistOffset = 0;
     playlistHasMore = true;
     playlistItems.innerHTML = "";
-    ensurePopupHasPlayer();             // <-- mount player UI inside popup
+	//mount player UI inside popup
+    ensurePopupHasPlayer();             
 	playlistPopup.classList.add('open');
 	currentPlaylist = [];
     currentTrackIndex = -1;
@@ -282,7 +387,7 @@ export function loadPlaylist(nameOrPath, reset = true) {
   playlistLoading = true;
   updateShuffleButton();
 
-  // Prefer sending 'path' (your controller supports it). Works if it still expects 'name' too.
+  // Prefer sending 'path'
   const qs = new URLSearchParams({
     path: nameOrPath,
     offset: String(playlistOffset),
@@ -316,21 +421,55 @@ export function loadPlaylist(nameOrPath, reset = true) {
     .finally(() => {
       playlistLoading = false;
       updateShuffleButton();
+	  //shuffle
+	  if (reset) {
+	    queueMicrotask?.(() => { hydrateFullPlaylistInBackground(); });
+	  }
+	  
     });
 }
 
-function updateShuffleButton() {
-  const b = document.getElementById("shuffle-button");
-  if (b) {
-    b.disabled = playlistLoading || currentPlaylist.length <= 1;
-    b.classList.toggle("disabled", b.disabled);
+function playNextShuffled() {
+  if (!currentPlaylist.length) return;
+
+  // Build/refresh order if needed
+  if (!__shuffle || __shuffle.order.length !== currentPlaylist.length) {
+    const seed = (__shuffle?.seed ?? hashSeed(String(currentPlaylistName))) ^ hashSeed(String(Date.now()));
+    __shuffle = {
+      seed,
+      order: makeShuffledOrder(currentPlaylist.length, currentTrackIndex, seed),
+      cursor: -1
+    };
   }
+
+  // Move cursor and pick item
+  __shuffle.cursor++;
+  if (__shuffle.cursor >= __shuffle.order.length) {
+    // reshuffle new cycle, avoid immediate repeat
+    __shuffle.order = makeShuffledOrder(currentPlaylist.length, currentTrackIndex, __shuffle.seed ^ hashSeed(String(Date.now())));
+    __shuffle.cursor = 0;
+  }
+
+  const idx = __shuffle.order[__shuffle.cursor];
+  if (idx === currentTrackIndex && currentPlaylist.length > 1) {
+    // ultra-rare edge case; bump once more
+    __shuffle.cursor = (__shuffle.cursor + 1) % __shuffle.order.length;
+  }
+
+  const nextIdx = __shuffle.order[__shuffle.cursor];
+  setActiveIndex(nextIdx);
+  ensureActiveVisible();
+  playSelected(currentPlaylist[nextIdx]);
 }
 
 /**
  * Play next track in current playlist if available.
  */
 export function nextInPlaylist() {
+  if (playlistMode === "shuffle") {
+    return playNextShuffled();
+  }
+	
   if (currentTrackIndex < currentPlaylist.length - 1) {
     setActiveIndex(currentTrackIndex + 1);
     playSelected(currentPlaylist[currentTrackIndex]); 
@@ -343,6 +482,14 @@ export function nextInPlaylist() {
         playSelected(currentPlaylist[currentTrackIndex]); 
       }
     }, 400);
+  }
+}
+
+function updateShuffleButton() {
+  const b = document.getElementById("shuffle-button");
+  if (b) {
+    b.disabled = playlistLoading || currentPlaylist.length <= 1;
+    b.classList.toggle("disabled", b.disabled);
   }
 }
 
@@ -361,10 +508,23 @@ export function prevInPlaylist() {
  */
 export function shufflePlaylist() {
   if (playlistLoading || currentPlaylist.length <= 1) return;
-  let r;
-  do { r = Math.floor(Math.random() * currentPlaylist.length); } while (r === currentTrackIndex);
-  setActiveIndex(r);
-  playSelected(currentPlaylist[r]);
+
+  playlistMode = "shuffle";
+
+  // If we already have a track, advance to a different one via the shuffle order.
+  // If nothing playing yet, just pick the first from the order (guaranteed != lastIdx when n>1).
+  if (currentTrackIndex >= 0) {
+    playNextShuffled();
+  } else {
+    const seed = hashSeed(String(currentPlaylistName)) ^ hashSeed(String(Date.now()));
+    __shuffle = { seed, order: makeShuffledOrder(currentPlaylist.length, -1, seed), cursor: 0 };
+    const idx = __shuffle.order[0];
+    setActiveIndex(idx);
+	ensureActiveVisible();
+    playSelected(currentPlaylist[idx]);
+  }
+
+  // If hydration hasn’t finished yet, it will re-seed and expand the order when complete.
 }
 
 function ensurePopupHasPlayer() {
@@ -433,6 +593,8 @@ export function closePlaylist() {
   playlistOffset = 0;
   playlistHasMore = true;
   playlistLoading = false;
+  playlistMode = "linear";
+  __shuffle = null;
 }
 // Export helper needed by playlist
 export let playMediaCallback = null;
