@@ -211,51 +211,93 @@
   }
 
   async function playMedia(filenameOrFolder) {
-    await stopAllMedia();
-	// track logical input path
-    state.sourcePath = filenameOrFolder; 
+    await stopAllMedia(); // keeps your cleanup semantics
+    state.sourcePath = filenameOrFolder;
 
-	// refresh for play next
-	const oldPrompt = document.getElementById('next-prompt');
-	if (oldPrompt) oldPrompt.remove();
-	
+    // remove any prior "next" prompt
+    const oldPrompt = document.getElementById('next-prompt');
+    if (oldPrompt) oldPrompt.remove();
+
     const container = document.getElementById('player-container');
     if (!container) throw new Error('player container missing');
 
-	const inPopup =
-	  document.getElementById('playlist-popup')?.classList.contains('open') &&
-	  document.getElementById('playlist-popup')?.contains(container);
-	  
+    const inPopup =
+      document.getElementById('playlist-popup')?.classList.contains('open') &&
+      document.getElementById('playlist-popup')?.contains(container);
+
     const name = filenameOrFolder.split('/').pop().replace(/\.[^/.]+$/, '');
-    container.innerHTML = `<div style="opacity:.7">Loading <b>${name}</b>…</div>`;
+
+    // do NOT replace the whole container each time (this would drop FS)
+    // Show a lightweight loading label without nuking the video element if it exists
+    let loadingLabel = container.querySelector('.player-loading-label');
+    if (!loadingLabel) {
+      loadingLabel = document.createElement('div');
+      loadingLabel.className = 'player-loading-label';
+      loadingLabel.style.opacity = '.7';
+      container.appendChild(loadingLabel);
+    }
+    loadingLabel.innerHTML = `Loading <b>${name}</b>…`;
+
+    // ensure there is ONE persistent <video id="media-player">
+    let video = document.getElementById('media-player');
+    const needCreate = !video;
+    if (needCreate) {
+      video = document.createElement('video');
+      video.id = 'media-player';
+      video.setAttribute('controls', '');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('crossorigin', '');
+      container.appendChild(video);
+
+      // wire ended only once
+      video.addEventListener('ended', () => {
+        try {
+          if (window.AppPlayer && typeof window.AppPlayer.onEnded === 'function') {
+            window.AppPlayer.onEnded(state.sourcePath);
+          }
+        } catch {}
+      });
+    }
+
+    // adjust styling based on popup-state without recreating the node
+    if (inPopup) {
+      container.classList.add('in-popup');
+      Object.assign(video.style, {
+        width: '100%',
+        height: '100%',
+        maxHeight: '100%',
+        objectFit: 'contain',
+        display: 'block'
+      });
+    } else {
+      container.classList.remove('in-popup');
+      Object.assign(video.style, {
+        width: '100%',
+        height: '',
+        maxHeight: '70vh',
+        objectFit: '',
+        display: 'block'
+      });
+    }
+
+    // if reusing, clear previous media bindings safely
+    try { if (hls) { hls.destroy(); } } catch {}
+    hls = null;
+    try {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    } catch {}
+
+    state.video = video;
 
     try {
       const { m3u8 } = await startVod(filenameOrFolder);
       const absM3u8 = toAbsolute(m3u8);
       const primedM3u8 = absM3u8 + (absM3u8.includes('?') ? '&' : '?') + 't=' + Date.now();
-
       state.m3u8 = absM3u8;
 
-	  if (inPopup) { 
-	    
-	    container.classList.add('in-popup');
-
-	    
-	    container.innerHTML = `
-	      <video id="media-player" controls playsinline crossorigin
-	             style="width:100%;height:100%;max-height:100%;object-fit:contain;display:block;"></video>`;
-	  } else {
-	    container.classList.remove('in-popup');
-
-	    container.innerHTML = `
-	      <video id="media-player" controls playsinline crossorigin
-	             style="width:100%;max-height:70vh;display:block;"></video>`;
-	  }
-	  
-      const video = document.getElementById('media-player');
-      state.video = video;
-
-      // Load subtitles - now with correct parameters
+      // load subtitles for the new source
       await loadSubtitles(video, filenameOrFolder);
 
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -273,7 +315,7 @@
           if (data.fatal) {
             switch (data.type) {
               case window.Hls.ErrorTypes.NETWORK_ERROR: try { hls.startLoad(); } catch {} break;
-              case window.Hls.ErrorTypes.MEDIA_ERROR: try { hls.recoverMediaError(); } catch {} break;
+              case window.Hls.ErrorTypes.MEDIA_ERROR:   try { hls.recoverMediaError(); } catch {} break;
               default: try { hls.destroy(); } catch {}; hls = null; break;
             }
           } else if (data.details === window.Hls.ErrorDetails.BUFFER_APPEND_ERROR) {
@@ -283,36 +325,41 @@
         hls.loadSource(primedM3u8);
         hls.attachMedia(video);
       } else {
-        container.innerHTML = `<div style="color:#c00">HLS not supported in this browser.</div>`;
+        // compact error without replacing the video (so FS state/DOM remains stable)
+        loadingLabel.innerHTML = `<div style="color:#c00">HLS not supported in this browser.</div>`;
         return;
       }
 
-	  addSkipToEndButton(video);
-	  
-      //notify explorer on natural end
-	  video.addEventListener('ended', () => {
-	    try {
-	      if (window.AppPlayer && typeof window.AppPlayer.onEnded === 'function') {
-	        window.AppPlayer.onEnded(state.sourcePath);
-	      }
-	    } catch {}
-	  });
+      addSkipToEndButton(video);
 
+      // clear the loading label once we’re playing or at least attempting
       try { await video.play(); }
       catch {
-        const clickToPlay = document.createElement('div');
-        clickToPlay.textContent = 'Click to play';
-        clickToPlay.style.cssText =
-          'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 16px system-ui;background:rgba(0,0,0,.35);color:#fff;cursor:pointer;';
-        const parent = container;
-        parent.style.position = 'relative';
-        parent.appendChild(clickToPlay);
-        const start = () => { video.play().catch(()=>{}); clickToPlay.remove(); };
-        clickToPlay.addEventListener('click', start, { once: true });
-        video.addEventListener('click', start, { once: true });
+		if (inPopup) {
+		  // In popup, do not show overlay; retry quietly when the media is ready.
+		  const retry = () => { video.play().catch(()=>{}); };
+		  // Quick retry + on readiness:
+		  setTimeout(retry, 80);
+		  video.addEventListener('canplay', retry, { once: true });
+		  video.addEventListener('loadeddata', retry, { once: true });
+		} else {
+		  // viewer-only: keep your click-to-play overlay
+		  const clickToPlay = document.createElement('div');
+		  clickToPlay.textContent = 'Click to play';
+		  clickToPlay.style.cssText =
+		    'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 16px system-ui;background:rgba(0,0,0,.35);color:#fff;cursor:pointer;';
+		  container.style.position = 'relative';
+		  container.appendChild(clickToPlay);
+		  const start = () => { video.play().catch(()=>{}); clickToPlay.remove(); };
+		  clickToPlay.addEventListener('click', start, { once: true });
+		  video.addEventListener('click', start, { once: true });
+		}
+      } finally {
+        try { loadingLabel.remove(); } catch {}
       }
     } catch (e) {
-      container.innerHTML = `<div style="color:#c00">Failed to start: ${String(e)}</div>`;
+      try { loadingLabel.innerHTML = `<div style="color:#c00">Failed to start: ${String(e)}</div>`; }
+      catch {}
     }
   }
 

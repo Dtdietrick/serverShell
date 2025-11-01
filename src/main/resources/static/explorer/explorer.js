@@ -110,6 +110,68 @@ function waitForMediaPlayer(timeoutMs = 3000) {
   });
 }
 
+
+//fullscreen
+function fsCurrent() {
+  try { return document.fullscreenElement || null; } catch { return null; }
+}
+
+function fsIsOnStage(el = fsCurrent()) {
+  if (!el) return false;
+  return el.id === "player-stage" || el.id === "player-container";
+}
+
+function fsIsOnPlayer(el = fsCurrent()) {
+  if (!el) return false;
+  // Built-in control usually fullscreens the <video id="media-player">
+  return el.id === "media-player";
+}
+
+// snapshot of what we should attempt to keep across autoplay
+let __fsCarry = null; // { mode: "stage" | "player" } or null
+
+function captureFsCarry() {
+  const cur = fsCurrent();
+  if (!cur) { __fsCarry = null; return; }
+  __fsCarry = fsIsOnStage(cur) ? { mode: "stage" } :
+              fsIsOnPlayer(cur) ? { mode: "player" } :
+              { mode: "stage" }; // safest fallback is stage
+}
+
+async function tryRequestFullscreen(targetEl) {
+  if (!targetEl || document.fullscreenElement) return true;
+  try {
+    await targetEl.requestFullscreen();
+    return true;
+  } catch (e) {
+    console.warn("[fs] requestFullscreen blocked:", e);
+    return false;
+  }
+}
+
+// If a programmatic FS is blocked, provide a one-tap affordance.
+// `how` = "stage" | "player"
+function showFsNudge(how, targetEl) {
+  try { document.getElementById("fs-nudge")?.remove(); } catch {}
+  const n = document.createElement("button");
+  n.id = "fs-nudge";
+  n.type = "button";
+  n.textContent = "Resume fullscreen";
+  Object.assign(n.style, {
+    position: "fixed", right: "12px", top: "12px",
+    zIndex: "2147483647", padding: "8px 10px",
+    borderRadius: "10px", border: "0",
+    background: "rgba(0,0,0,.75)", color: "#fff",
+    cursor: "pointer"
+  });
+  n.title = "Click to re-enter fullscreen";
+  n.addEventListener("click", async () => {
+    try { await targetEl?.requestFullscreen(); } catch {}
+    try { n.remove(); } catch {}
+  }, { once: true });
+  document.body.appendChild(n);
+}
+
 function writeLocalFavorites(category, set) {
   try {
     localStorage.setItem(LS_FAV_KEY(category), JSON.stringify([...set]));
@@ -139,6 +201,12 @@ document.addEventListener("explorer:navigated", (e) => {
   const leaf = segs[segs.length - 1] || "";
   setLastClickedGroupLabel(leaf);
   renderGroupLabel();
+});
+
+document.addEventListener("fullscreenchange", () => {
+  if (document.fullscreenElement) {
+    try { document.getElementById("fs-nudge")?.remove(); } catch {}
+  }
 });
 
 const PIXELART_DIR = "Movies/BGs";   
@@ -312,6 +380,8 @@ function stopAmbient() {
 
   try { if (window.__ambientRO) { window.__ambientRO.disconnect(); window.__ambientRO = null; } } catch {}
   
+  document.querySelectorAll('.ambient-fullscreen-btn').forEach(el => el.remove());
+  
   document.body.classList.remove("ambient-on");
 }
 
@@ -418,15 +488,18 @@ async function startAmbientForMusic() {
       _ambientHls.on(window.Hls.Events.ERROR, (_, data) => console.warn("[ambient][hls] error", data));
       _ambientHls.loadSource(m3u8Url);
       _ambientHls.attachMedia(vid);
-      _ambientHls.on(window.Hls.Events.MANIFEST_PARSED, () => vid.play().catch(() => {})); // ✅ fixed
+      _ambientHls.on(window.Hls.Events.MANIFEST_PARSED, () => vid.play().catch(() => {})); 
     } else {
       vid.src = m3u8Url;
       vid.play().catch(() => {});
     }
 
     document.body.classList.add("ambient-on");
-    addAmbientFullscreenButton(stage, vid);
-    document.getElementById("player-container")?.classList.add("music-ambient-on");
+	document.getElementById("player-container")?.classList.add("music-ambient-on");
+	
+    try { addAmbientFullscreenButton(stage); } catch (e) { console.warn(e); }
+	const btn = document.querySelector('.ambient-fullscreen-btn');
+	if (btn) btn.style.display = '';
 
     // clean listeners when the video errors out
     vid.addEventListener("error", () => {
@@ -440,6 +513,8 @@ async function startAmbientForMusic() {
 }
 
 function addAmbientFullscreenButton(stage) {
+  // avoid duplicates
+  if (stage.querySelector('.ambient-fullscreen-btn')) return;
   stage.querySelectorAll(".ambient-fullscreen-btn").forEach(el => el.remove());
   const btn = document.createElement("button");
   btn.className = "ambient-fullscreen-btn";
@@ -676,14 +751,45 @@ export async function playAndStage(path) {
   if (viewerHeader) viewerHeader.textContent = display;    
   setCurrentPath(rel);                                       
 
-
   await window.AppPlayer.playMedia(rel);                      
 
- 
   const isMusic = (categoryOf(rel) === "Music");             
   if (isMusic) startAmbientForMusic(); else stopAmbient();   
 
   stageAutoplayFor(rel);                                    
+
+  // === RE-APPLY FULLSCREEN IF NEEDED ===
+  try {
+    // If user is already still in FS, nothing to do
+    if (document.fullscreenElement) { __fsCarry = null; return; }
+
+    // Nothing to carry? Done.
+    const carry = __fsCarry; 
+    __fsCarry = null;
+    if (!carry) return;
+
+    // Resolve targets we might FS
+    const mediaEl = await waitForMediaPlayer(1500);
+    const stageEl = ensurePlayerStage() || document.getElementById("player-stage") || document.getElementById("player-container");
+
+    let target = null;
+    if (carry.mode === "stage") {
+      target = stageEl;
+    } else if (carry.mode === "player") {
+      // In ambient-on we still prefer stage (keeps background), else target the <video>
+      target = document.body.classList.contains("ambient-on") ? stageEl : mediaEl;
+    }
+
+    if (!target) return;
+
+    const ok = await tryRequestFullscreen(target);
+    if (!ok) {
+      // Provide a one-tap nudge to comply with user-gesture requirements
+      showFsNudge(carry.mode, target);
+    }
+  } catch (e) {
+    console.warn("[fs] reapply failed:", e);
+  }
 }
 
 //auto play check
@@ -842,7 +948,9 @@ export function stageAutoplayFor(libraryPath) {
   if (!AUTOPLAY_ENABLED || !window.AppPlayer) return;
 
   window.AppPlayer.onEnded = async () => {
-    try {
+	captureFsCarry();
+	
+	try {
       const container = document.getElementById('player-container');
       const inPopup   = !!container?.closest('.in-popup');
       const delayMs   = readAutoplayDelayMs();

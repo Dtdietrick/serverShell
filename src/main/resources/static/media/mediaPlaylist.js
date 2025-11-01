@@ -6,6 +6,7 @@ const popupPlayer = document.getElementById("popup-player");
 const playlistItems = document.getElementById("playlist-items");
 const playlistMediaLabel = document.getElementById("playlist-media"); 
 const viewerPlayer = document.getElementById("viewer-player"); 
+let __popupFsSticky = false; 
 
 // Playlist management variables
 let currentPlaylistName = null;
@@ -23,6 +24,16 @@ let originalPlayerParent = null;
 
 let playlistMode = "linear";  // "linear" | "shuffle"
 let __shuffle = null;         // { order:number[], cursor:number, seed:number }
+
+//fullscreen change listener
+document.addEventListener("fullscreenchange", () => {
+  const playerContainer = document.getElementById("player-container");
+  const inPopup = !!playerContainer?.classList.contains("in-popup");
+  if (!inPopup) return;
+  // If user is in FS while the player lives in the popup, we remember that;
+  // if they exit FS, we stop reapplying on subsequent items.
+  __popupFsSticky = !!document.fullscreenElement;
+});
 
 // real shuffle
 function randomizer(seed) {
@@ -338,6 +349,23 @@ function playSelected(n) {
   //start playback in the popup
   playMedia(n.path, true, true);
 
+  //re-apply fullscreen (if applicable)
+  queueMicrotask?.(async () => {
+    try {
+	  // if user exited FS, do NOT force it back
+      if (!__popupFsSticky) return;                 
+	  // already in FS
+	  if (document.fullscreenElement) return;       
+
+      const stage = document.getElementById("player-stage") || document.getElementById("player-container");
+      const vid   = document.getElementById("media-player");
+      const target = (document.body.classList.contains("ambient-on") ? stage : vid) || stage || vid;
+      try { await target?.requestFullscreen?.(); } catch {}
+    } catch (e) {
+      console.warn("[popup][fs] reapply failed:", e);
+    }
+  });
+  
   // in case UI jitter, re-check on the next tick
   queueMicrotask?.(() => {
     setActiveIndexByPath(nowPlayingPath);
@@ -350,9 +378,15 @@ function playSelected(n) {
 	    if (mediaEl.__popupOnEnded) {
 	      mediaEl.removeEventListener("ended", mediaEl.__popupOnEnded);
 	    }
-	    mediaEl.__popupOnEnded = () => {
-	      try { window.AppPlayer?.onEnded?.(); } catch (e) { console.warn("[popup] onEnded call failed:", e); }
-	    };
+		mediaEl.__popupOnEnded = () => {
+		  try {
+		    // No captureFsCarry(): whether we re-enter FS is driven solely by __popupFsSticky.
+		    window.AppPlayer?.onEnded?.();
+		  } catch (e) {
+		    console.warn("[popup] onEnded call failed:", e);
+		  }
+		  try { schedulePopupAutoplay(); } catch {}
+		};
 	    mediaEl.addEventListener("ended", mediaEl.__popupOnEnded);
 	  }
 	} catch {}
@@ -522,6 +556,15 @@ function updateShuffleButton() {
   }
 }
 
+//reset fullscreen flags
+export function resetFullscreenState() {
+  try { document.getElementById('fs-nudge')?.remove(); } catch {}
+  // Clear any carry flag if present in this module
+  try { if (typeof __fsCarry !== 'undefined') { __fsCarry = null; } } catch {}
+  if (document.fullscreenElement) {
+    try { document.exitFullscreen(); } catch {}
+  }
+}
 /**
  * Play previous track in current playlist if available.
  */
@@ -561,6 +604,10 @@ export function shufflePlaylist() {
 function ensurePopupHasPlayer() {
   const player = document.getElementById("player-container");
   if (!player) return;
+
+  try { window.resetFullscreenState?.(); } catch {}
+  __popupFsSticky = false; 
+
   if (!originalPlayerParent) {
     originalPlayerParent = player.parentElement || null;
   }
@@ -568,9 +615,8 @@ function ensurePopupHasPlayer() {
     popupPlayer.appendChild(player);
     player.classList.add("in-popup");
   }
-  
+
   try { if (window.stageAutoplayFor) window.stageAutoplayFor("POPUP"); } catch {}
-  
   moveLabelToPopup();
 }
 
@@ -605,6 +651,8 @@ function pausePlayback() {
  */
 export function closePlaylist() {
   if (__popupAutoplayTimer) { clearTimeout(__popupAutoplayTimer); __popupAutoplayTimer = null; }
+  try { window.resetFullscreenState?.(); } catch {}
+  __popupFsSticky = false
   pausePlayback();
 
   playlistPopup.classList.remove('open');
