@@ -23,10 +23,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.dtd.serverShell.config.allowedMediaType;
+import com.dtd.serverShell.repository.AppUserRepository; 
+import com.dtd.serverShell.model.AppUser;  
 
 @Service
 public class MediaService {
@@ -38,6 +41,13 @@ public class MediaService {
     private Path mediaRoot() {
         return Paths.get(mediaDir).toAbsolutePath().normalize();
     }
+    
+    private final AppUserRepository userRepository;
+
+    public MediaService(AppUserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+    
     public List<String> listMediaFiles(String currentPath) {
         Path basePath = Paths.get(mediaDir);
         Path targetPath = currentPath.isEmpty() ? basePath : basePath.resolve(currentPath);
@@ -108,12 +118,85 @@ public class MediaService {
                 for (Path f : childFiles) items.add(rel(basePath, f));
             }
 
+            if (isInScopedPlaylistsDir(basePath, targetPath)) {
+                final String meLower = currentUsername().toLowerCase();
+                final Set<String> knownUsers = knownUsernamesLower();
+
+                // IMPORTANT: don't reassign 'items' — collect then mutate.
+                List<String> filtered = items.stream().filter(s -> {
+                    // Keep directories (trailing slash) untouched
+                    if (s.endsWith("/")) return true;
+
+                    // Only consider .m3u8 files as candidates for "user-private playlists"
+                    if (!s.toLowerCase().endsWith(".m3u")) return true;
+
+                    String baseNoExt = lowerBasenameNoExt(s);
+                    if (baseNoExt == null) return true;
+
+                    // If filename equals a known username (case-insensitive) and it's not me -> hide it.
+                    // (Pre-staged/public playlists typically have different names and will remain visible.)
+                    if (knownUsers.contains(baseNoExt) && !baseNoExt.equals(meLower)) {
+                        return false; // hide other users' <username>.m3u8
+                    }
+                    return true; // keep everything else
+                }).collect(Collectors.toList());
+
+                // keep the same List reference so it's still "effectively final" for earlier lambdas
+                items.clear();
+                items.addAll(filtered);
+            }
+
             items.removeIf(s -> s == null || s.isBlank() || "/".equals(s) || ".".equals(s));
             return items;
         } catch (IOException e) {
             log.error("Failed listing media path: " + targetPath, e);
             return List.of();
         }
+    }
+    
+    private boolean isInScopedPlaylistsDir(Path basePath, Path targetPath) {
+        Path rel = basePath.relativize(targetPath).normalize();
+        if (rel.getNameCount() < 2) return false;
+
+        String top = rel.getName(0).toString();
+        if (!equalsAnyIgnoreCase(top, "Movies", "TV", "Music")) return false;
+
+        // Look for any segment containing "Playlists" (case-insensitive) after the category
+        for (int i = 1; i < rel.getNameCount(); i++) {
+            String seg = rel.getName(i).toString();
+            if (seg.toLowerCase().contains("playlists")) return true;
+        }
+        return false;
+    }
+    
+    private boolean equalsAnyIgnoreCase(String s, String... opts) {
+        for (String o : opts) {
+            if (s.equalsIgnoreCase(o)) return true;
+        }
+        return false;
+    }
+    
+    private Set<String> knownUsernamesLower() {
+        Set<String> out = new HashSet<>();
+        try {
+            for (AppUser u : userRepository.findAll()) {
+                if (u != null && u.getUsername() != null && !u.getUsername().isBlank()) {
+                    out.add(u.getUsername().toLowerCase());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[MediaService] Unable to load usernames: {}", e.toString());
+        }
+        return out;
+    }
+
+    private String lowerBasenameNoExt(String filename) {
+        if (filename == null) return null;
+        int slash = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'));
+        String base = (slash >= 0) ? filename.substring(slash + 1) : filename;
+        int dot = base.lastIndexOf('.');
+        if (dot > 0) base = base.substring(0, dot);
+        return base.toLowerCase();
     }
     
     private String currentUsername() {

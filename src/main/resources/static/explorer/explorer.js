@@ -92,7 +92,7 @@ async function resolveVodM3U8(relPath) {
   });
   if (!res.ok) throw new Error(`VOD resolve failed: ${res.status}`);
   const { m3u8 } = await res.json();
-  return m3u8; // e.g. /media/vod/fs/Movies/BGs/SomeLoop/index.m3u8
+  return m3u8; 
 }
 
 function waitForMediaPlayer(timeoutMs = 3000) {
