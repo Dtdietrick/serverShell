@@ -95,15 +95,20 @@ public class EmulatorController {
               return errorResponse("Requires linux server");
             }
 
-            // user logic
+            // user and core logic
             String username = principal.getName();
-            log.info("[INIT DIR] ROM Save Dir Root: " + romSaveDir);
-            log.info("[INIT DIR]  Username: " + username);
+        	String core = simplifyCoreEmulator(rom);
+        	//set paths
+        	Path userRoot = Paths.get(romSaveDir, "users", username);
+            Path configPath = userRoot.resolve("config/" + core);
+            Path savePath = userRoot.resolve("save/" + core);
+            userPaths.configPath = configPath;
+            userPaths.savePath = savePath;
+            
+            log.info("[INIT DIR] ROM Save Dir Root: " + userPaths.configPath);
+            log.info("[INIT DIR]  Username: " + userPaths.savePath);
             // pre-warm user directory if needed
             initializeUserRetroarchIfMissing(username, rom);
-            // set paths
-            Files.createDirectories(userPaths.configPath.toAbsolutePath());
-            Files.createDirectories(userPaths.savePath.toAbsolutePath() );
             log.info("[INIT DIR] Config path: " + userPaths.configPath.toAbsolutePath());
             log.info("[INIT DIR] save path: " + userPaths.savePath.toAbsolutePath() );
             //decide ports and bind them nice and close
@@ -337,14 +342,10 @@ public class EmulatorController {
     
     //prewarm logic
     private void initializeUserRetroarchIfMissing(String username, String rom) throws IOException {
-    	String core = simplifyCoreEmulator(rom);
-    	Path userRoot = Paths.get(romSaveDir, "users", username);
-        Path configPath = userRoot.resolve("config/" + core);
-        Path savePath = userRoot.resolve("save/" + core);
 
-        userPaths.configPath = configPath;
-        userPaths.savePath = savePath;
-        
+        Path configPath = userPaths.configPath;
+        Path savePath = userPaths.savePath;
+
         boolean needsInit = !Files.exists(configPath) || !Files.exists(savePath);
 
         if (needsInit) {
@@ -352,6 +353,7 @@ public class EmulatorController {
 
             // Copy default template files
             Path defaultRoot = Paths.get(romSaveDir, "default");
+            String core = simplifyCoreEmulator(rom);
             Path defaultConfig = defaultRoot.resolve("config/" + core);
             Path defaultsave  = defaultRoot.resolve("save/" + core);
 
