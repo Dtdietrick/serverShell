@@ -134,18 +134,18 @@
 }
 
 /* Rows */
-#playlist-items li #media-scroll{
+#playlist-items li.playlist-item {
   list-style: none;
-  padding: .6rem .8rem;
+  margin: 0.15rem 0;          /* tighter vertical gap between rows */
+  padding: 0.35rem 0.6rem;    /* much slimmer internal padding */
   border: 1px solid #2b3140;
-  border-radius: .3rem;
-  margin-bottom: .4rem;
-  cursor: pointer;
+  border-radius: 0.2rem;
+  background: #111823;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #111823;
-  scroll-margin-top: 76px;  
+  width: 100%;                /* use full available width */
+  box-sizing: border-box;
 }
 
 .media-row {
